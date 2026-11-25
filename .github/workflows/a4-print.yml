@@ -78,9 +78,13 @@ jobs:
       - name: Run full test suite
         shell: bash
         run: |
+          set +e
           bun test > "$RUNNER_TEMP/a4-test.log" 2>&1
           status=$?
+          set -e
           cat "$RUNNER_TEMP/a4-test.log"
+          mkdir -p test-results/a4
+          cp "$RUNNER_TEMP/a4-test.log" test-results/a4/test.log || true
           if [ "$status" -ne 0 ]; then
             exit "$status"
           fi
