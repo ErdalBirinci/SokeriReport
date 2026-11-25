@@ -1,0 +1,1168 @@
+{
+  "entries": [
+    {
+      "sgv": 132,
+      "date": 1772323200000,
+      "dateString": "2026-03-01T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 154,
+      "date": 1772330400000,
+      "dateString": "2026-03-01T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 176,
+      "date": 1772337600000,
+      "dateString": "2026-03-01T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 198,
+      "date": 1772344800000,
+      "dateString": "2026-03-01T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 110,
+      "date": 1772352000000,
+      "dateString": "2026-03-01T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 132,
+      "date": 1772359200000,
+      "dateString": "2026-03-01T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 154,
+      "date": 1772366400000,
+      "dateString": "2026-03-01T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 176,
+      "date": 1772373600000,
+      "dateString": "2026-03-01T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 198,
+      "date": 1772380800000,
+      "dateString": "2026-03-01T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 110,
+      "date": 1772388000000,
+      "dateString": "2026-03-01T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 132,
+      "date": 1772395200000,
+      "dateString": "2026-03-01T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 154,
+      "date": 1772402400000,
+      "dateString": "2026-03-01T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 169,
+      "date": 1772409600000,
+      "dateString": "2026-03-02T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 191,
+      "date": 1772416800000,
+      "dateString": "2026-03-02T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 103,
+      "date": 1772424000000,
+      "dateString": "2026-03-02T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 125,
+      "date": 1772431200000,
+      "dateString": "2026-03-02T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 147,
+      "date": 1772438400000,
+      "dateString": "2026-03-02T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 169,
+      "date": 1772445600000,
+      "dateString": "2026-03-02T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 191,
+      "date": 1772452800000,
+      "dateString": "2026-03-02T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 103,
+      "date": 1772460000000,
+      "dateString": "2026-03-02T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 125,
+      "date": 1772467200000,
+      "dateString": "2026-03-02T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 147,
+      "date": 1772474400000,
+      "dateString": "2026-03-02T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 169,
+      "date": 1772481600000,
+      "dateString": "2026-03-02T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 191,
+      "date": 1772488800000,
+      "dateString": "2026-03-02T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 96,
+      "date": 1772496000000,
+      "dateString": "2026-03-03T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 118,
+      "date": 1772503200000,
+      "dateString": "2026-03-03T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 140,
+      "date": 1772510400000,
+      "dateString": "2026-03-03T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 162,
+      "date": 1772517600000,
+      "dateString": "2026-03-03T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 184,
+      "date": 1772524800000,
+      "dateString": "2026-03-03T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 96,
+      "date": 1772532000000,
+      "dateString": "2026-03-03T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 118,
+      "date": 1772539200000,
+      "dateString": "2026-03-03T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 140,
+      "date": 1772546400000,
+      "dateString": "2026-03-03T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 162,
+      "date": 1772553600000,
+      "dateString": "2026-03-03T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 184,
+      "date": 1772560800000,
+      "dateString": "2026-03-03T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 96,
+      "date": 1772568000000,
+      "dateString": "2026-03-03T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 118,
+      "date": 1772575200000,
+      "dateString": "2026-03-03T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 133,
+      "date": 1772582400000,
+      "dateString": "2026-03-04T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 155,
+      "date": 1772589600000,
+      "dateString": "2026-03-04T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 177,
+      "date": 1772596800000,
+      "dateString": "2026-03-04T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 199,
+      "date": 1772604000000,
+      "dateString": "2026-03-04T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 111,
+      "date": 1772611200000,
+      "dateString": "2026-03-04T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 133,
+      "date": 1772618400000,
+      "dateString": "2026-03-04T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 155,
+      "date": 1772625600000,
+      "dateString": "2026-03-04T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 177,
+      "date": 1772632800000,
+      "dateString": "2026-03-04T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 199,
+      "date": 1772640000000,
+      "dateString": "2026-03-04T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 111,
+      "date": 1772647200000,
+      "dateString": "2026-03-04T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 133,
+      "date": 1772654400000,
+      "dateString": "2026-03-04T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 155,
+      "date": 1772661600000,
+      "dateString": "2026-03-04T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 170,
+      "date": 1772668800000,
+      "dateString": "2026-03-05T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 192,
+      "date": 1772676000000,
+      "dateString": "2026-03-05T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 104,
+      "date": 1772683200000,
+      "dateString": "2026-03-05T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 126,
+      "date": 1772690400000,
+      "dateString": "2026-03-05T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 148,
+      "date": 1772697600000,
+      "dateString": "2026-03-05T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 170,
+      "date": 1772704800000,
+      "dateString": "2026-03-05T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 192,
+      "date": 1772712000000,
+      "dateString": "2026-03-05T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 104,
+      "date": 1772719200000,
+      "dateString": "2026-03-05T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 126,
+      "date": 1772726400000,
+      "dateString": "2026-03-05T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 148,
+      "date": 1772733600000,
+      "dateString": "2026-03-05T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 170,
+      "date": 1772740800000,
+      "dateString": "2026-03-05T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 192,
+      "date": 1772748000000,
+      "dateString": "2026-03-05T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 97,
+      "date": 1772755200000,
+      "dateString": "2026-03-06T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 119,
+      "date": 1772762400000,
+      "dateString": "2026-03-06T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 141,
+      "date": 1772769600000,
+      "dateString": "2026-03-06T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 163,
+      "date": 1772776800000,
+      "dateString": "2026-03-06T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 185,
+      "date": 1772784000000,
+      "dateString": "2026-03-06T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 97,
+      "date": 1772791200000,
+      "dateString": "2026-03-06T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 119,
+      "date": 1772798400000,
+      "dateString": "2026-03-06T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 141,
+      "date": 1772805600000,
+      "dateString": "2026-03-06T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 163,
+      "date": 1772812800000,
+      "dateString": "2026-03-06T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 185,
+      "date": 1772820000000,
+      "dateString": "2026-03-06T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 97,
+      "date": 1772827200000,
+      "dateString": "2026-03-06T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 119,
+      "date": 1772834400000,
+      "dateString": "2026-03-06T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 134,
+      "date": 1772841600000,
+      "dateString": "2026-03-07T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 156,
+      "date": 1772848800000,
+      "dateString": "2026-03-07T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 178,
+      "date": 1772856000000,
+      "dateString": "2026-03-07T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 200,
+      "date": 1772863200000,
+      "dateString": "2026-03-07T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 112,
+      "date": 1772870400000,
+      "dateString": "2026-03-07T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 134,
+      "date": 1772877600000,
+      "dateString": "2026-03-07T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 156,
+      "date": 1772884800000,
+      "dateString": "2026-03-07T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 178,
+      "date": 1772892000000,
+      "dateString": "2026-03-07T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 200,
+      "date": 1772899200000,
+      "dateString": "2026-03-07T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 112,
+      "date": 1772906400000,
+      "dateString": "2026-03-07T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 134,
+      "date": 1772913600000,
+      "dateString": "2026-03-07T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 156,
+      "date": 1772920800000,
+      "dateString": "2026-03-07T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 171,
+      "date": 1772928000000,
+      "dateString": "2026-03-08T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 193,
+      "date": 1772935200000,
+      "dateString": "2026-03-08T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 105,
+      "date": 1772942400000,
+      "dateString": "2026-03-08T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 127,
+      "date": 1772949600000,
+      "dateString": "2026-03-08T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 149,
+      "date": 1772956800000,
+      "dateString": "2026-03-08T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 171,
+      "date": 1772964000000,
+      "dateString": "2026-03-08T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 193,
+      "date": 1772971200000,
+      "dateString": "2026-03-08T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 105,
+      "date": 1772978400000,
+      "dateString": "2026-03-08T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 127,
+      "date": 1772985600000,
+      "dateString": "2026-03-08T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 149,
+      "date": 1772992800000,
+      "dateString": "2026-03-08T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 171,
+      "date": 1773000000000,
+      "dateString": "2026-03-08T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 193,
+      "date": 1773007200000,
+      "dateString": "2026-03-08T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 98,
+      "date": 1773014400000,
+      "dateString": "2026-03-09T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 120,
+      "date": 1773021600000,
+      "dateString": "2026-03-09T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 142,
+      "date": 1773028800000,
+      "dateString": "2026-03-09T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 164,
+      "date": 1773036000000,
+      "dateString": "2026-03-09T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 186,
+      "date": 1773043200000,
+      "dateString": "2026-03-09T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 98,
+      "date": 1773050400000,
+      "dateString": "2026-03-09T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 120,
+      "date": 1773057600000,
+      "dateString": "2026-03-09T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 142,
+      "date": 1773064800000,
+      "dateString": "2026-03-09T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 164,
+      "date": 1773072000000,
+      "dateString": "2026-03-09T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 186,
+      "date": 1773079200000,
+      "dateString": "2026-03-09T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 98,
+      "date": 1773086400000,
+      "dateString": "2026-03-09T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 120,
+      "date": 1773093600000,
+      "dateString": "2026-03-09T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 135,
+      "date": 1773100800000,
+      "dateString": "2026-03-10T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 157,
+      "date": 1773108000000,
+      "dateString": "2026-03-10T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 179,
+      "date": 1773115200000,
+      "dateString": "2026-03-10T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 201,
+      "date": 1773122400000,
+      "dateString": "2026-03-10T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 113,
+      "date": 1773129600000,
+      "dateString": "2026-03-10T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 135,
+      "date": 1773136800000,
+      "dateString": "2026-03-10T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 157,
+      "date": 1773144000000,
+      "dateString": "2026-03-10T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 179,
+      "date": 1773151200000,
+      "dateString": "2026-03-10T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 201,
+      "date": 1773158400000,
+      "dateString": "2026-03-10T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 113,
+      "date": 1773165600000,
+      "dateString": "2026-03-10T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 135,
+      "date": 1773172800000,
+      "dateString": "2026-03-10T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 157,
+      "date": 1773180000000,
+      "dateString": "2026-03-10T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 172,
+      "date": 1773187200000,
+      "dateString": "2026-03-11T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 194,
+      "date": 1773194400000,
+      "dateString": "2026-03-11T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 106,
+      "date": 1773201600000,
+      "dateString": "2026-03-11T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 128,
+      "date": 1773208800000,
+      "dateString": "2026-03-11T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 150,
+      "date": 1773216000000,
+      "dateString": "2026-03-11T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 172,
+      "date": 1773223200000,
+      "dateString": "2026-03-11T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 194,
+      "date": 1773230400000,
+      "dateString": "2026-03-11T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 106,
+      "date": 1773237600000,
+      "dateString": "2026-03-11T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 128,
+      "date": 1773244800000,
+      "dateString": "2026-03-11T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 150,
+      "date": 1773252000000,
+      "dateString": "2026-03-11T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 172,
+      "date": 1773259200000,
+      "dateString": "2026-03-11T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 194,
+      "date": 1773266400000,
+      "dateString": "2026-03-11T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 99,
+      "date": 1773273600000,
+      "dateString": "2026-03-12T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 121,
+      "date": 1773280800000,
+      "dateString": "2026-03-12T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 143,
+      "date": 1773288000000,
+      "dateString": "2026-03-12T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 165,
+      "date": 1773295200000,
+      "dateString": "2026-03-12T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 187,
+      "date": 1773302400000,
+      "dateString": "2026-03-12T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 99,
+      "date": 1773309600000,
+      "dateString": "2026-03-12T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 121,
+      "date": 1773316800000,
+      "dateString": "2026-03-12T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 143,
+      "date": 1773324000000,
+      "dateString": "2026-03-12T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 165,
+      "date": 1773331200000,
+      "dateString": "2026-03-12T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 187,
+      "date": 1773338400000,
+      "dateString": "2026-03-12T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 99,
+      "date": 1773345600000,
+      "dateString": "2026-03-12T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 121,
+      "date": 1773352800000,
+      "dateString": "2026-03-12T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 136,
+      "date": 1773360000000,
+      "dateString": "2026-03-13T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 158,
+      "date": 1773367200000,
+      "dateString": "2026-03-13T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 180,
+      "date": 1773374400000,
+      "dateString": "2026-03-13T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 202,
+      "date": 1773381600000,
+      "dateString": "2026-03-13T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 114,
+      "date": 1773388800000,
+      "dateString": "2026-03-13T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 136,
+      "date": 1773396000000,
+      "dateString": "2026-03-13T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 158,
+      "date": 1773403200000,
+      "dateString": "2026-03-13T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 180,
+      "date": 1773410400000,
+      "dateString": "2026-03-13T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 202,
+      "date": 1773417600000,
+      "dateString": "2026-03-13T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 114,
+      "date": 1773424800000,
+      "dateString": "2026-03-13T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 136,
+      "date": 1773432000000,
+      "dateString": "2026-03-13T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 158,
+      "date": 1773439200000,
+      "dateString": "2026-03-13T22:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 173,
+      "date": 1773446400000,
+      "dateString": "2026-03-14T00:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 195,
+      "date": 1773453600000,
+      "dateString": "2026-03-14T02:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 107,
+      "date": 1773460800000,
+      "dateString": "2026-03-14T04:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 129,
+      "date": 1773468000000,
+      "dateString": "2026-03-14T06:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 151,
+      "date": 1773475200000,
+      "dateString": "2026-03-14T08:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 173,
+      "date": 1773482400000,
+      "dateString": "2026-03-14T10:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 195,
+      "date": 1773489600000,
+      "dateString": "2026-03-14T12:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 107,
+      "date": 1773496800000,
+      "dateString": "2026-03-14T14:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 129,
+      "date": 1773504000000,
+      "dateString": "2026-03-14T16:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 151,
+      "date": 1773511200000,
+      "dateString": "2026-03-14T18:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 173,
+      "date": 1773518400000,
+      "dateString": "2026-03-14T20:00:00.000Z",
+      "type": "sgv"
+    },
+    {
+      "sgv": 195,
+      "date": 1773525600000,
+      "dateString": "2026-03-14T22:00:00.000Z",
+      "type": "sgv"
+    }
+  ],
+  "treatments": [
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-01T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-01T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-02T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-02T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-03T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-03T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-04T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-04T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-05T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-05T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-06T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-06T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-07T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-07T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-08T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-08T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-09T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-09T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-10T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-10T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-11T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-11T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-12T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-12T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-13T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-13T22:00:00.000Z",
+      "insulin": 10
+    },
+    {
+      "eventType": "Meal Bolus",
+      "created_at": "2026-03-14T08:00:00.000Z",
+      "insulin": 4,
+      "carbs": 45
+    },
+    {
+      "eventType": "Long-Acting",
+      "created_at": "2026-03-14T22:00:00.000Z",
+      "insulin": 10
+    }
+  ]
+}

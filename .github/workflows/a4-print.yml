@@ -1,0 +1,113 @@
+name: A4 print regression
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: a4-print-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  a4-print:
+    name: Real Chrome A4 print test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      # The test only skips locally when Chrome is absent or A4_TEST_SKIP=1.
+      # In CI, missing Chrome and skipped output are both fatal.
+      A4_TEST_SKIP: "0"
+      A4_TEST_REQUIRE_CHROME: "1"
+      A4_REQUIRE_PDF_TEXT: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
+      TZ: UTC
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache Bun downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@48483d551c22a1fe6154c6a195ccc6d5773dc8c4 # v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+
+      - name: Expose and verify Chrome
+        shell: bash
+        run: |
+          chrome_path="${{ steps.chrome.outputs.chrome-path }}"
+          if [ -z "$chrome_path" ] || [ ! -f "$chrome_path" ]; then
+            echo "::error::Chrome installation did not produce a usable browser path."
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
+
+      - name: Install PDF text tool
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          pdftotext -v 2>&1 | head -1
+
+      - name: Run full test suite
+        shell: bash
+        run: |
+          bun test > "$RUNNER_TEMP/a4-test.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/a4-test.log"
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          if grep -q '(skip)' "$RUNNER_TEMP/a4-test.log"; then
+            echo "::error::At least one test was skipped; the A4 regression must run in CI."
+            exit 1
+          fi
+
+      - name: Build
+        run: bun run build
+
+      - name: Upload A4 artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: a4-print-${{ matrix.os }}
+          path: test-results/a4
+          if-no-files-found: warn
+
+  required:
+    name: A4 print regression required
+    needs: a4-print
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every A4 matrix job
+        if: needs.a4-print.result != 'success'
+        run: |
+          echo "::error::A4 print matrix did not succeed: ${{ needs.a4-print.result }}"
+          exit 1

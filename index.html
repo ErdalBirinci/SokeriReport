@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SokeriReport — Zero-Cloud Glycemic Control Report</title>
+    <meta
+      name="description"
+      content="Analyze LibreView, Dexcom Clarity and Nightscout files in your browser. TIR, CV, dawn phenomenon and hypoglycemia hours in a one-page report for the last 14 days, 1 month or 3 months. No data is sent to a server."
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SokeriReport" />
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-192.png" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230d9488'/%3E%3Cpath d='M16 7c4.2 5.2 6.4 8.4 6.4 11.4a6.4 6.4 0 1 1-12.8 0C9.6 15.4 11.8 12.2 16 7z' fill='white'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
