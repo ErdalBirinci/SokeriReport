@@ -327,14 +327,31 @@ async function runA4Test(chromePath: string): Promise<void> {
         '--no-first-run',
         '--no-default-browser-check',
         '--remote-debugging-port=0',
+        ...(process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : []),
         `--user-data-dir=${profile}`,
         appUrl,
       ],
-      { stdout: 'ignore', stderr: 'ignore' },
+      { stdout: 'ignore', stderr: 'inherit' },
     );
     const port = await waitForDebugPort(profile);
     cdp = await connectCdp(port);
-    await waitForPage(cdp, sampleReady);
+    await cdp.send('Page.navigate', { url: appUrl });
+    try {
+      await waitForPage(cdp, sampleReady);
+    } catch (error) {
+      const diagnostics = await cdp
+        .evaluate(`JSON.stringify({
+          url: location.href,
+          title: document.title,
+          body: (document.body?.innerText ?? '').slice(0, 1200),
+        })`)
+        .catch((diagnosticError) => `diagnostics failed: ${String(diagnosticError)}`);
+      const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+      if (screenshot?.data) {
+        writeFileSync(join(artifactDir, 'failure.png'), Buffer.from(screenshot.data, 'base64'));
+      }
+      throw new Error(`${error instanceof Error ? error.message : String(error)} Page: ${diagnostics}`);
+    }
 
     await cdp.evaluate(`(() => {
       const sample = Array.from(document.querySelectorAll('#main button')).find((button) =>
