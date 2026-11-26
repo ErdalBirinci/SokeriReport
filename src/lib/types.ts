@@ -61,6 +61,25 @@ export interface Dataset {
   meta: DatasetMeta;
 }
 
+export interface ParseDiagnosticRemoval {
+  label: string;
+  count: number;
+}
+
+/** What the importer read, and where candidate rows were dropped. */
+export interface ParseDiagnostics {
+  /** Candidate rows or PDF table rows found. */
+  rows: number;
+  /** Candidate rows with a readable date/time. */
+  dates: number;
+  /** Candidate rows with a readable glucose value. */
+  values: number;
+  /** Readings left after filtering and duplicate removal. */
+  kept: number;
+  removed: ParseDiagnosticRemoval[];
+  notes: string[];
+}
+
 export type ParseOutcome =
   | { ok: true; dataset: Dataset; warnings: string[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; diagnostics?: ParseDiagnostics };
