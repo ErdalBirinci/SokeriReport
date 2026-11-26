@@ -2770,7 +2770,7 @@ input {
   }
 
   .section {
-    margin-top: 3px;
+    margin-top: 2px;
     break-inside: avoid;
   }
 
@@ -3076,7 +3076,7 @@ input {
   }
 
   .chart-agp svg {
-    height: 160px;
+    height: 170px;
   }
 
 }
