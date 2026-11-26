@@ -48,6 +48,8 @@ export interface TimeMeta {
 export interface DatasetMeta {
   source: string;
   fileName: string;
+  /** Every source file when several exports were merged. */
+  files?: string[];
   /** Unit found in the source file — readings are converted to mg/dL regardless. */
   unit: 'mg/dL' | 'mmol/L';
   date: DateMeta;
@@ -80,6 +82,33 @@ export interface ParseDiagnostics {
   notes: string[];
 }
 
+export interface SummaryValue {
+  label: string;
+  value: string;
+}
+
+/** Metrics a glucose summary PDF prints, without the underlying readings. */
+export interface SummaryImport {
+  fileName: string;
+  source: string;
+  unit: 'mg/dL' | 'mmol/L';
+  periodText?: string;
+  days?: number;
+  readings?: number;
+  tir?: number;
+  tbr?: number;
+  tar?: number;
+  veryLow?: number;
+  veryHigh?: number;
+  mean?: number;
+  cv?: number;
+  gmi?: number;
+  coverage?: number;
+  values: SummaryValue[];
+  warnings: string[];
+}
+
 export type ParseOutcome =
-  | { ok: true; dataset: Dataset; warnings: string[] }
+  | { ok: true; dataset: Dataset; warnings: string[]; diagnostics?: ParseDiagnostics }
+  | { ok: true; summary: SummaryImport; warnings: string[] }
   | { ok: false; error: string; diagnostics?: ParseDiagnostics };

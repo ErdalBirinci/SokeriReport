@@ -350,7 +350,7 @@ describe('PDF report imports', () => {
     expect(outcome.warnings.join(' ')).toContain('opens in mmol/L');
   });
 
-  test('rejects summary PDFs with export guidance instead of parsing chart labels', () => {
+  test('returns a summary PDF instead of parsing chart labels as readings', () => {
     const outcome = parsePdfLines(
       page(
         'Endocrinology Consultation Report',
@@ -363,12 +363,11 @@ describe('PDF report imports', () => {
       'summary.pdf',
     );
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.error).toContain('summary report');
-    expect(outcome.error).toContain('average glucose 133');
-    expect(outcome.error).toContain('TIR 78%');
-    expect(outcome.error).toContain('LibreView → Download CSV');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok || !('summary' in outcome)) return;
+    expect(outcome.summary.tir).toBe(78);
+    expect(outcome.summary.mean).toBe(133);
+    expect(outcome.summary.gmi).toBe(6.4);
   });
 
   test('analyzes a PDF table with fewer than eight readings', () => {
@@ -488,12 +487,13 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.readings[0].v).toBeGreaterThan(130);
   });
 
-  test('fails a summary PDF with the raw-export instructions', async () => {
+  test('opens a summary PDF as a summary instead of failing', async () => {
     const outcome = await parseFile(await fixture('summary.pdf'));
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.error).toContain('summary report');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok || !('summary' in outcome)) return;
+    expect(outcome.summary.tir).toBe(78);
+    expect(outcome.summary.mean).toBe(133);
   });
 
   test('fails an image-only PDF without dumping binary header bytes', async () => {

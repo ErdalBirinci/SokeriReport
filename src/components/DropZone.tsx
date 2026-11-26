@@ -113,7 +113,7 @@ export default function DropZone({ onFiles, busy }: Props) {
           <b>Nightscout</b> · JSON
         </span>
         <span className="format">
-          <b>PDF</b> · readings table
+          <b>PDF</b> · readings table or AGP summary
         </span>
       </div>
     </div>

@@ -3,9 +3,12 @@ export interface PrintOptions {
   preparedBy: string;
   signature: boolean;
   grayscale: boolean;
+  /** Hide patient, note and file identifiers for sharing. */
+  anonymise: boolean;
   showQuality: boolean;
   showComparison: boolean;
   showQuestions: boolean;
+  showHypoSafety: boolean;
 }
 
 export const DEFAULT_PRINT_OPTIONS: PrintOptions = {
@@ -13,9 +16,11 @@ export const DEFAULT_PRINT_OPTIONS: PrintOptions = {
   preparedBy: '',
   signature: false,
   grayscale: false,
+  anonymise: false,
   showQuality: false,
   showComparison: false,
   showQuestions: false,
+  showHypoSafety: false,
 };
 
 const STORAGE_KEY = 'sokerireport-print-options';
@@ -39,9 +44,11 @@ export function parsePrintOptions(raw: string | null): PrintOptions {
       preparedBy: asString(parsed.preparedBy, ''),
       signature: asBoolean(parsed.signature, false),
       grayscale: asBoolean(parsed.grayscale, false),
+      anonymise: asBoolean(parsed.anonymise, false),
       showQuality: asBoolean(parsed.showQuality, false),
       showComparison: asBoolean(parsed.showComparison, false),
       showQuestions: asBoolean(parsed.showQuestions, false),
+      showHypoSafety: asBoolean(parsed.showHypoSafety, false),
     };
   } catch {
     return { ...DEFAULT_PRINT_OPTIONS };

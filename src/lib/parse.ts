@@ -11,6 +11,7 @@ import type {
   ReadingKind,
   TimeMeta,
 } from './types';
+import { parseSummaryPdf } from './summaryPdf';
 
 const MMOL_FACTOR = 18.0182;
 
@@ -337,7 +338,29 @@ function finalize(
     meta: { ...meta, unit: isMmol ? 'mmol/L' : 'mg/dL' },
   };
 
-  return { ok: true, dataset, warnings };
+  const duplicates = valid.length - deduped.length;
+  const removed = [...(trace.removed ?? [])];
+  if (invalid) removed.push({ label: 'skipped: the date or value was unreadable', count: invalid });
+  if (outOfRange) {
+    removed.push({ label: 'skipped: the value was outside 1–799 mg/dL', count: outOfRange });
+  }
+  if (duplicates) {
+    removed.push({ label: 'collapsed: duplicate timestamp', count: duplicates });
+  }
+
+  return {
+    ok: true,
+    dataset,
+    warnings,
+    diagnostics: makeDiagnostics({
+      rows: trace.rows ?? readings.length,
+      dates: trace.dates ?? readings.filter((r) => Number.isFinite(r.t)).length,
+      values: trace.values ?? readings.filter((r) => Number.isFinite(r.v)).length,
+      kept: deduped.length,
+      removed,
+      notes: trace.notes ?? [],
+    }),
+  };
 }
 
 function parseLibreView(
@@ -1430,8 +1453,8 @@ function normalisePdfGlyphs(text: string): string {
 
 /**
  * Turn a PDF reading table back into the same time/value pairs the CSV path
- * understands. Summary reports deliberately fail here: their averages and
- * charts cannot be expanded into individual readings without inventing data.
+ * understands. A summary-only PDF is returned as a summary import; its averages
+ * and charts are never expanded into invented individual readings.
  */
 export function parsePdfLines(
   pages: string[],
@@ -1468,6 +1491,8 @@ export function parsePdfLines(
     if (daily) return pdfDailyOutcome(daily, fileName, text, override);
   }
   if (table) return table.outcome;
+  const summary = parseSummaryPdf(pages, fileName);
+  if (summary) return { ok: true, summary, warnings: summary.warnings };
   const hasTableHeader = hasPdfReadingsTable(lines, text);
   return fail(
     pdfSummaryMessage(text),
