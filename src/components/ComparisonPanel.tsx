@@ -2,6 +2,7 @@ import type { Metrics } from '../lib/metrics';
 import type { Dataset } from '../lib/types';
 import { dateLong, fmt1, fmtInt } from '../lib/format';
 import { fmtGlucose, fmtGlucoseDelta, type GlucoseUnit } from '../lib/glucose';
+import { comparisonNarrative } from '../lib/comparison';
 
 export interface Comparison {
   fileName: string;
@@ -13,6 +14,7 @@ interface Props {
   comparison: Comparison;
   current: Metrics;
   unit: GlucoseUnit;
+  anonymise?: boolean;
 }
 
 type Tone = 'good' | 'bad' | 'flat';
@@ -23,7 +25,7 @@ function deltaTone(delta: number, goodDirection: 'up' | 'down', flat = 0.5): Ton
   return good ? 'good' : 'bad';
 }
 
-export default function ComparisonPanel({ comparison, current, unit }: Props) {
+export default function ComparisonPanel({ comparison, current, unit, anonymise = false }: Props) {
   const previous = comparison.metrics;
   const currentDays = Math.max(1, Math.round(current.spanDays));
   const previousDays = Math.max(1, Math.round(previous.spanDays));
@@ -47,7 +49,8 @@ export default function ComparisonPanel({ comparison, current, unit }: Props) {
       <div className="comparison-head">
         <span className="comparison-title">Compared with previous export</span>
         <span className="comparison-meta">
-          {comparison.fileName} · {dateLong(previous.start)} – {dateLong(previous.end)}
+          {anonymise ? 'file name hidden' : comparison.fileName} · {dateLong(previous.start)} –{' '}
+          {dateLong(previous.end)}
         </span>
       </div>
       {windowsDiffer && (
@@ -66,8 +69,8 @@ export default function ComparisonPanel({ comparison, current, unit }: Props) {
         ))}
       </div>
       <p className="comparison-note">
-        Current period {dateLong(current.start)} – {dateLong(current.end)} · differences are
-        current minus previous.
+        <b>{comparisonNarrative(current, previous, unit)}</b> Current period{' '}
+        {dateLong(current.start)} – {dateLong(current.end)}; differences are current minus previous.
       </p>
     </div>
   );

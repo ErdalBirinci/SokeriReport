@@ -58,7 +58,7 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
 
           <p className="hero-lead">
             Drop in your LibreView, Dexcom Clarity or Nightscout export — CSV, JSON, or a PDF with a
-            glucose readings table. TIR, glycemic variability, the dawn phenomenon and your most
+            glucose readings table or a printed AGP summary. TIR, glycemic variability, the dawn phenomenon and your most
             frequent hypoglycemia hours become a clean, one-page report for your doctor — for the
             last 14 days, 1 month or 3 months. The file never leaves your browser.
           </p>
@@ -257,7 +257,8 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
             <h3>Download it from your device</h3>
             <p>
               In LibreView export the “Glucose Data” CSV, in Clarity the “Export” CSV, in Nightscout
-              the entries JSON. A PDF with a date/time + glucose table works too.
+              the entries JSON. A PDF with a date/time + glucose table, or a printed AGP summary,
+              works too.
             </p>
           </div>
 
@@ -276,7 +277,8 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
             <p>
               Choose 14 days, 1 month or 3 months, then print the A4 report: TIR, CV, GMI, dawn
               phenomenon, hypoglycemia by hour and the clinical summary on a single page by
-              default; optional sections are measured before printing.
+              default; optional sections are measured before printing. In the browser print dialog,
+              choose <b>Save as PDF</b> — SokeriReport lays out the page, the browser writes the file.
             </p>
           </div>
         </div>

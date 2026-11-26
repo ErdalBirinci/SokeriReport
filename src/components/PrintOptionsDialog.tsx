@@ -45,8 +45,10 @@ export default function PrintOptionsDialog({ initial, onSave, onClose }: Props) 
       >
         <h2 id="print-options-title">Print setup</h2>
         <p id="print-options-intro">
-          Customize the printed A4 report. Optional sections are measured again before printing, and
-          these settings are remembered in this browser.
+          Customize the printed A4 report. SokeriReport lays out the page and your browser creates
+          the PDF from its print dialog; choose <b>Save as PDF</b> there. Optional sections are
+          measured again before printing. The suggested filename is
+          SokeriReport_&lt;start&gt;_&lt;end&gt;.pdf (SokeriReport_summary.pdf in sharing mode).
         </p>
 
         <div className="option-fields">
@@ -70,6 +72,19 @@ export default function PrintOptionsDialog({ initial, onSave, onClose }: Props) 
         </div>
 
         <div className="option-toggles">
+          <label className="option-toggle option-toggle-strong">
+            <input
+              type="checkbox"
+              checked={draft.anonymise}
+              onChange={(event) => update('anonymise', event.target.checked)}
+            />
+            <span>
+              <b>Anonymised sharing copy</b>
+              <small>
+                Hides the patient name, clinical note and file name in the printout and summary.
+              </small>
+            </span>
+          </label>
           <label className="option-toggle">
             <input
               type="checkbox"
@@ -123,6 +138,17 @@ export default function PrintOptionsDialog({ initial, onSave, onClose }: Props) 
             <span>
               <b>Questions for the clinician</b>
               <small>The three discussion prompts, when available.</small>
+            </span>
+          </label>
+          <label className="option-toggle">
+            <input
+              type="checkbox"
+              checked={draft.showHypoSafety}
+              onChange={(event) => update('showHypoSafety', event.target.checked)}
+            />
+            <span>
+              <b>Hypoglycemia safety details</b>
+              <small>Longest low episodes and level 2 events in the printout.</small>
             </span>
           </label>
         </div>

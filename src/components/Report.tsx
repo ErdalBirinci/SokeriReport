@@ -7,6 +7,8 @@ import DayTraces from './DayTraces';
 import DaysTable from './DaysTable';
 import HypoHeatmap from './HypoHeatmap';
 import HypoHistogram from './HypoHistogram';
+import HypoSafetyPanel from './HypoSafetyPanel';
+import ImportReceipt from './ImportReceipt';
 import InsightList from './InsightList';
 import KpiGrid from './KpiGrid';
 import QuestionCard from './QuestionCard';
@@ -17,7 +19,7 @@ import {
   type Metrics,
   type TargetProfileId,
 } from '../lib/metrics';
-import type { Dataset, DateOrder } from '../lib/types';
+import type { Dataset, DateOrder, ParseDiagnostics } from '../lib/types';
 import { clockLabel, dateLong, fmt1, fmtInt } from '../lib/format';
 import { UNIT_OPTIONS, fmtGlucose, rangeLabel, type GlucoseUnit } from '../lib/glucose';
 import { REPORT_PERIODS, type ReportPeriod } from '../lib/period';
@@ -25,6 +27,8 @@ import type { PrintOptions } from '../lib/printOptions';
 
 interface Props {
   dataset: Dataset;
+  /** Full imported dataset; the report may be sliced to the selected period. */
+  receiptDataset?: Dataset;
   period: ReportPeriod;
   onPeriod: (period: ReportPeriod) => void;
   availablePeriods: ReportPeriod[];
@@ -47,10 +51,14 @@ interface Props {
   onComparePick: () => void;
   onClearComparison: () => void;
   printOptions: PrintOptions;
+  diagnostics?: ParseDiagnostics | null;
+  excluded: ReadonlySet<string>;
+  onExcludedChange: (next: Set<string>) => void;
 }
 
 export default function Report({
   dataset,
+  receiptDataset = dataset,
   period,
   onPeriod,
   availablePeriods,
@@ -73,6 +81,9 @@ export default function Report({
   onComparePick,
   onClearComparison,
   printOptions,
+  diagnostics,
+  excluded,
+  onExcludedChange,
 }: Props) {
   const days = Math.max(1, Math.round(metrics.spanDays));
   const [copied, setCopied] = useState(false);
@@ -135,23 +146,31 @@ export default function Report({
         <div className="report-fields">
           <label className="meta-field">
             <span>Patient</span>
-            <input
-              className="meta-input"
-              value={patient}
-              onChange={(event) => onPatient(event.target.value)}
-              placeholder="Full name"
-              aria-label="Patient name"
-            />
+            {printOptions.anonymise ? (
+              <span className="meta-redacted">Hidden for sharing</span>
+            ) : (
+              <input
+                className="meta-input"
+                value={patient}
+                onChange={(event) => onPatient(event.target.value)}
+                placeholder="Full name"
+                aria-label="Patient name"
+              />
+            )}
           </label>
           <label className="meta-field">
             <span>Clinical note</span>
-            <input
-              className="meta-input"
-              value={note}
-              onChange={(event) => onNote(event.target.value)}
-              placeholder="Optional"
-              aria-label="Clinical note"
-            />
+            {printOptions.anonymise ? (
+              <span className="meta-redacted">Hidden for sharing</span>
+            ) : (
+              <input
+                className="meta-input"
+                value={note}
+                onChange={(event) => onNote(event.target.value)}
+                placeholder="Optional"
+                aria-label="Clinical note"
+              />
+            )}
           </label>
         </div>
       </header>
@@ -165,6 +184,14 @@ export default function Report({
           ))}
         </div>
       )}
+
+      <ImportReceipt
+        dataset={receiptDataset}
+        diagnostics={diagnostics}
+        excluded={excluded}
+        onExcludedChange={onExcludedChange}
+        anonymise={printOptions.anonymise}
+      />
 
       <div className="formatbar">
         {dataset.meta.time.absolute ? (
@@ -295,7 +322,12 @@ export default function Report({
             <p>Direction of change, not a substitute for the clinical picture</p>
           </div>
           <div className="card">
-            <ComparisonPanel comparison={comparison} current={metrics} unit={unit} />
+            <ComparisonPanel
+              comparison={comparison}
+              current={metrics}
+              unit={unit}
+              anonymise={printOptions.anonymise}
+            />
           </div>
         </section>
       )}
@@ -333,6 +365,9 @@ export default function Report({
                 {fmt1(metrics.nightHypoShare)}%
               </div>
             )}
+            <div className={printOptions.showHypoSafety ? undefined : 'print-hide'}>
+              <HypoSafetyPanel metrics={metrics} unit={unit} />
+            </div>
           </div>
         </section>
 
@@ -401,7 +436,11 @@ export default function Report({
             <button className="btn btn-ghost btn-sm" type="button" onClick={onSummaryReset}>
               Reset to automatic summary
             </button>
-            <span className="summary-meta">Includes patient name and clinical note</span>
+            <span className="summary-meta">
+              {printOptions.anonymise
+                ? 'Sharing mode: identifiers and the clinical note are left out of the printed summary'
+                : 'Includes patient name and clinical note'}
+            </span>
           </div>
         </div>
       </section>
@@ -443,7 +482,8 @@ export default function Report({
 
       <footer className="report-foot">
         <span>
-          {new Date().toLocaleDateString('en-GB')} · SokeriReport · {dataset.meta.fileName}
+          {new Date().toLocaleDateString('en-GB')} · SokeriReport ·{' '}
+          {printOptions.anonymise ? 'file name hidden' : dataset.meta.fileName}
           {printOptions.preparedBy.trim() ? ` · Prepared by ${printOptions.preparedBy.trim()}` : ''}
         </span>
         <span>

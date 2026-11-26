@@ -6,6 +6,7 @@ import ImportDiagnostics from './components/ImportDiagnostics';
 import Landing from './components/Landing';
 import PrintOptionsDialog from './components/PrintOptionsDialog';
 import Report from './components/Report';
+import SummaryReport from './components/SummaryReport';
 import {
   deleteArchive,
   listArchives,
@@ -14,7 +15,10 @@ import {
   type ArchiveSummary,
 } from './lib/archive';
 import { buildDemoDataset } from './lib/demo';
+import { applyExclusions, readingKey } from './lib/exclusions';
+import { pdfTitle } from './lib/exportTitle';
 import type { GlucoseUnit } from './lib/glucose';
+import { mergeDatasets } from './lib/merge';
 import { computeMetrics, type TargetProfileId } from './lib/metrics';
 import type { ParseOptions } from './lib/parse';
 import { parseFileAsync } from './lib/parseAsync';
@@ -28,7 +32,7 @@ import {
 import { prepareReportForPrint, resetPrintFit, type PrintPreflight } from './lib/printFit';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
 import { buildSummary } from './lib/summary';
-import type { Dataset, DateOrder, ParseDiagnostics } from './lib/types';
+import type { Dataset, DateOrder, ParseDiagnostics, SummaryImport } from './lib/types';
 
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
@@ -46,6 +50,8 @@ export default function App() {
   const [summaryOverride, setSummaryOverride] = useState<string | null>(null);
   const [printCheck, setPrintCheck] = useState<PrintPreflight | null>(null);
   const [diagnostics, setDiagnostics] = useState<ParseDiagnostics | null>(null);
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
+  const [summaryImport, setSummaryImport] = useState<SummaryImport | null>(null);
 
   const [profile, setProfile] = useState<TargetProfileId>('standard');
   const [unit, setUnit] = useState<GlucoseUnit>('mg/dL');
@@ -59,15 +65,34 @@ export default function App() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
   const compareInput = useRef<HTMLInputElement>(null);
+  const addInput = useRef<HTMLInputElement>(null);
   /** Tokens make the latest file win when two parses overlap. */
   const parseToken = useRef(0);
   const compareToken = useRef(0);
 
-  const reportDataset = useMemo(
-    () => (dataset ? sliceDataset(dataset, period) : null),
-    [dataset, period],
+  const effectiveDataset = useMemo(
+    () => (dataset ? applyExclusions(dataset, excluded) : null),
+    [dataset, excluded],
   );
-  const periodOptions = useMemo(() => (dataset ? availablePeriods(dataset) : []), [dataset]);
+  const reportDataset = useMemo(
+    () => (effectiveDataset ? sliceDataset(effectiveDataset, period) : null),
+    [effectiveDataset, period],
+  );
+  const periodOptions = useMemo(
+    () => (effectiveDataset ? availablePeriods(effectiveDataset) : []),
+    [effectiveDataset],
+  );
+  const excludedCount = useMemo(
+    () => (dataset && effectiveDataset ? dataset.readings.length - effectiveDataset.readings.length : 0),
+    [dataset, effectiveDataset],
+  );
+  const displayWarnings = useMemo(
+    () =>
+      excludedCount > 0
+        ? [...warnings, `${excludedCount} readings excluded manually in the import receipt.`]
+        : warnings,
+    [excludedCount, warnings],
+  );
   const metrics = useMemo(
     () => (reportDataset ? computeMetrics(reportDataset, { profile, unit }) : null),
     [reportDataset, profile, unit],
@@ -86,11 +111,43 @@ export default function App() {
   const autoSummary = useMemo(
     () =>
       metrics && reportDataset
-        ? buildSummary(metrics, reportDataset, patient, note, unit)
+        ? buildSummary(metrics, reportDataset, patient, note, unit, {
+            anonymise: printOptions.anonymise,
+          })
         : '',
-    [metrics, reportDataset, patient, note, unit],
+    [metrics, reportDataset, patient, note, unit, printOptions.anonymise],
   );
-  const summary = summaryOverride ?? autoSummary;
+  const summary = printOptions.anonymise ? autoSummary : (summaryOverride ?? autoSummary);
+
+  const changeExclusions = useCallback(
+    (next: Set<string>) => {
+      const remaining = dataset
+        ? dataset.readings.filter((reading) => !next.has(readingKey(reading))).length
+        : 0;
+      if (dataset && remaining === 0) {
+        setError('Keep at least one reading in the report before printing or saving it.');
+        return;
+      }
+      setError(null);
+      setExcluded(next);
+    },
+    [dataset],
+  );
+
+  // Browsers use document.title as the default PDF filename; never include PHI.
+  useEffect(() => {
+    const title = summaryImport
+      ? 'SokeriReport_summary'
+      : metrics
+        ? pdfTitle(metrics.start, metrics.end, printOptions.anonymise)
+        : null;
+    if (!title) return;
+    const previousTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [metrics, printOptions.anonymise, summaryImport]);
 
   const handleFiles = useCallback(async (files: File[], options: ParseOptions = {}) => {
     const file = files[0];
@@ -101,13 +158,32 @@ export default function App() {
     setReordering(false);
     setError(null);
     setDiagnostics(null);
+    setExcluded(new Set());
+    setSummaryImport(null);
     const outcome = await parseFileAsync(file, options);
     // A newer drop or a reset has taken over; do not overwrite its state.
     if (request !== parseToken.current) return;
-    if (outcome.ok) {
+    if (outcome.ok && 'summary' in outcome) {
+      setDataset(null);
+      setSummaryImport(outcome.summary);
+      setWarnings(outcome.summary.warnings);
+      setError(null);
+      setSourceFile(null);
+      setPrevious(null);
+      setPrintCheck(null);
+      setPatient('');
+      setNote('');
+      setSummaryOverride(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setBusy(false);
+      return;
+    }
+    if (outcome.ok && 'dataset' in outcome) {
+      setSummaryImport(null);
       setDataset(outcome.dataset);
       setPeriod(defaultPeriod(outcome.dataset));
       setWarnings(outcome.warnings);
+      setDiagnostics(outcome.diagnostics ?? null);
       // Open the report in the unit the file was printed in (mmol/L PDFs in
       // mmol/L), instead of leaving the previous session's choice.
       setUnit(outcome.dataset.meta.unit);
@@ -135,14 +211,69 @@ export default function App() {
     setBusy(true);
     const outcome = await parseFileAsync(file);
     if (request !== compareToken.current) return;
-    if (outcome.ok) {
+    if (outcome.ok && 'dataset' in outcome) {
       setPrevious({ fileName: file.name, dataset: outcome.dataset });
-    } else {
+    } else if (!outcome.ok) {
       setError(`Could not read the comparison file. ${outcome.error}`);
       setDiagnostics(outcome.diagnostics ?? null);
+    } else {
+      setError('A summary-only PDF cannot be used as the comparison file; use the raw export.');
     }
     setBusy(false);
   }, []);
+
+  const handleAddSources = useCallback(
+    async (files: File[]) => {
+      if (!dataset || !files.length) return;
+      setBusy(true);
+      setError(null);
+      setPrintCheck(null);
+      setSummaryOverride(null);
+
+      let merged = effectiveDataset ?? dataset;
+      let added = 0;
+      let duplicates = 0;
+      const notes: string[] = [];
+      for (const file of files) {
+        const outcome = await parseFileAsync(file);
+        if (!outcome.ok) {
+          notes.push(`Could not add ${file.name}: ${outcome.error}`);
+          continue;
+        }
+        if ('summary' in outcome) {
+          notes.push(`${file.name} only has summary values and cannot be merged.`);
+          continue;
+        }
+        const result = mergeDatasets(merged, outcome.dataset);
+        merged = result.dataset;
+        added += result.added;
+        duplicates += result.duplicates;
+      }
+
+      if (added === 0) {
+        setError(notes.join(' ') || 'No new readings were found in the added file(s).');
+        setBusy(false);
+        return;
+      }
+
+      setDataset(merged);
+      setSummaryImport(null);
+      setExcluded(new Set());
+      setDiagnostics(null);
+      setSourceFile(null);
+      setWarnings([
+        ...warnings,
+        `Merged ${files.length === 1 ? files[0].name : `${files.length} files`}: ${added} new readings added${duplicates ? `, ${duplicates} duplicate timestamps skipped` : ''}.`,
+        ...notes,
+      ]);
+      setPeriod((current) =>
+        isPeriodAvailable(merged, current) ? current : defaultPeriod(merged),
+      );
+      setBusy(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [dataset, effectiveDataset, warnings],
+  );
 
   const handlePrint = useCallback(() => {
     const result = prepareReportForPrint();
@@ -166,7 +297,7 @@ export default function App() {
   // Printing from the browser menu (Ctrl+P) skips the button, so the same
   // one-page fit runs on every print, and is cleared when printing ends.
   useEffect(() => {
-    if (!metrics) return;
+    if (!metrics && !summaryImport) return;
     const beforePrint = () => {
       prepareReportForPrint();
     };
@@ -180,7 +311,7 @@ export default function App() {
       window.removeEventListener('beforeprint', beforePrint);
       window.removeEventListener('afterprint', afterPrint);
     };
-  }, [metrics]);
+  }, [metrics, summaryImport]);
 
   useEffect(() => {
     if (!printCheck) return;
@@ -208,14 +339,15 @@ export default function App() {
   const handleArchiveSave = useCallback(
     async (label: string, passphrase: string) => {
       if (!dataset) return;
+      const savedDataset = effectiveDataset ?? dataset;
       setArchiveBusy(true);
       setArchiveError(null);
       setArchiveNotice(null);
       try {
         await saveArchive(label, passphrase, {
-          dataset,
+          dataset: savedDataset,
           period,
-          warnings,
+          warnings: displayWarnings,
           patient,
           note,
           summaryOverride,
@@ -230,7 +362,7 @@ export default function App() {
         setArchiveBusy(false);
       }
     },
-    [dataset, period, warnings, patient, note, summaryOverride, profile, unit],
+    [dataset, effectiveDataset, displayWarnings, period, patient, note, summaryOverride, profile, unit],
   );
 
   const handleArchiveOpen = useCallback(async (id: string, passphrase: string) => {
@@ -242,6 +374,7 @@ export default function App() {
     try {
       const payload = await loadArchive(id, passphrase);
       setDataset(payload.dataset);
+      setSummaryImport(null);
       setPeriod(
         payload.period && isPeriodAvailable(payload.dataset, payload.period)
           ? payload.period
@@ -256,6 +389,7 @@ export default function App() {
       setPrevious(null);
       setPrintCheck(null);
       setDiagnostics(null);
+      setExcluded(new Set());
       const archiveNotes = ['Opened from the encrypted local archive.'];
       if (payload.dataset.meta.date.uncertain) {
         // Re-parsing needs the original export, which the archive does not hold.
@@ -297,9 +431,10 @@ export default function App() {
       setReordering(true);
       setError(null);
       setDiagnostics(null);
+      setExcluded(new Set());
       const outcome = await parseFileAsync(sourceFile, { dateOrder: order });
       if (request !== parseToken.current) return;
-      if (outcome.ok) {
+      if (outcome.ok && 'dataset' in outcome) {
         setDataset(outcome.dataset);
         setPeriod((current) =>
           isPeriodAvailable(outcome.dataset, current)
@@ -307,10 +442,13 @@ export default function App() {
             : defaultPeriod(outcome.dataset),
         );
         setWarnings(outcome.warnings);
+        setDiagnostics(outcome.diagnostics ?? null);
         setSummaryOverride(null);
-      } else {
+      } else if (!outcome.ok) {
         setError(outcome.error);
         setDiagnostics(outcome.diagnostics ?? null);
+      } else {
+        setError('A summary-only PDF cannot be re-read with a date order; use the raw export.');
       }
       setReordering(false);
     },
@@ -345,7 +483,9 @@ export default function App() {
     setPrevious(null);
     setPrintCheck(null);
     setDiagnostics(null);
+    setExcluded(new Set());
     setDataset(demo);
+    setSummaryImport(null);
     setPeriod(defaultPeriod(demo));
     setWarnings([
       'Sample data: 90 days of synthetic CGM readings. Use the report period selector to try 14 days, 1 month or 3 months. Not real patient data.',
@@ -364,7 +504,9 @@ export default function App() {
     setPrevious(null);
     setPrintCheck(null);
     setDiagnostics(null);
+    setExcluded(new Set());
     setDataset(null);
+    setSummaryImport(null);
     setPeriod('14d');
     setWarnings([]);
     setError(null);
@@ -414,7 +556,7 @@ export default function App() {
             <span className="pill-dot" />
             0 bytes sent
           </span>
-          {dataset ? (
+          {dataset || summaryImport ? (
             <>
               <button className="btn btn-ghost btn-sm" type="button" onClick={loadDemo}>
                 Sample data
@@ -425,6 +567,16 @@ export default function App() {
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => void openArchive()}>
                 Saved
               </button>
+              {dataset && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => addInput.current?.click()}
+                  disabled={busy}
+                >
+                  Add data
+                </button>
+              )}
               <button
                 className="btn btn-ghost btn-sm"
                 type="button"
@@ -432,7 +584,12 @@ export default function App() {
               >
                 Print setup
               </button>
-              <button className="btn btn-primary btn-sm" type="button" onClick={handlePrint}>
+              <button
+                className="btn btn-primary btn-sm"
+                type="button"
+                onClick={handlePrint}
+                title="Open the browser print dialog, then choose Save as PDF"
+              >
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
                   <path
                     d="M7 9V4h10v5M7 18H5.5A1.5 1.5 0 0 1 4 16.5v-5A1.5 1.5 0 0 1 5.5 10h13a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 18.5 18H17"
@@ -467,6 +624,19 @@ export default function App() {
           const files = Array.from(event.target.files ?? []);
           event.target.value = '';
           void handleCompareFile(files);
+        }}
+      />
+
+      <input
+        ref={addInput}
+        type="file"
+        accept=".csv,.tsv,.txt,.json,.pdf,application/pdf"
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = '';
+          void handleAddSources(files);
         }}
       />
 
@@ -543,14 +713,22 @@ export default function App() {
       )}
 
       <main id="main">
-        {dataset && reportDataset && metrics ? (
+        {summaryImport ? (
+          <SummaryReport
+            summary={summaryImport}
+            patient={patient}
+            onPatient={setPatient}
+            printOptions={printOptions}
+          />
+        ) : dataset && reportDataset && metrics ? (
           <Report
             dataset={reportDataset}
+            receiptDataset={dataset ?? undefined}
             period={period}
             onPeriod={changePeriod}
             availablePeriods={periodOptions}
             metrics={metrics}
-            warnings={warnings}
+            warnings={displayWarnings}
             patient={patient}
             note={note}
             summary={summary}
@@ -568,6 +746,9 @@ export default function App() {
             onComparePick={() => compareInput.current?.click()}
             onClearComparison={() => setPrevious(null)}
             printOptions={printOptions}
+            diagnostics={diagnostics}
+            excluded={excluded}
+            onExcludedChange={changeExclusions}
           />
         ) : (
           <Landing onFiles={handleFiles} onDemo={loadDemo} busy={busy} />
