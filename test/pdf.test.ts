@@ -110,6 +110,26 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.readings).toHaveLength(12);
   });
 
+  test('recovers rows whose value comes before the time', () => {
+    const outcome = parsePdfLines(
+      page(
+        'Glucose Readings',
+        'Date/Time Glucose (mg/dL)',
+        ...Array.from({ length: 12 }, (_, index) => {
+          const minute = (index % 6) * 5;
+          const hour = 8 + Math.floor(index / 6);
+          return `${100 + index} ${hour}:${String(minute).padStart(2, '0')} 27.10.2026`;
+        }),
+      ),
+      'value-first.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(12);
+    expect(outcome.dataset.readings[0].v).toBe(100);
+  });
+
   test('converts a mmol/L readings table to mg/dL', () => {
     const outcome = parsePdfLines(
       page(
@@ -154,16 +174,16 @@ describe('PDF report imports', () => {
     expect(outcome.error).toContain('LibreView → Download CSV');
   });
 
-  test('explains a PDF table with fewer than eight readings', () => {
+  test('analyzes a PDF table with fewer than eight readings', () => {
     const outcome = parsePdfLines(
       page('Glucose Readings', 'Date/Time Glucose (mg/dL)', ...readings(5)),
       'few.pdf',
     );
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.error).toContain('only 5 usable glucose readings');
-    expect(outcome.error).toContain('at least 8');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(5);
+    expect(outcome.warnings.join(' ')).toContain('too small for a representative glycemic report');
   });
 
   test('analyzes a table whose rows collapse to a small unique sample', () => {
@@ -182,21 +202,31 @@ describe('PDF report imports', () => {
     expect(outcome.warnings.join(' ')).toContain('too small for a representative glycemic report');
   });
 
-  test('analyzes a tiny PDF when the user explicitly allows it', () => {
-    const outcome = parsePdfLines(
-      page('Glucose Readings', 'Date/Time Glucose (mg/dL)', ...readings(5)),
-      'few.pdf',
-      undefined,
-      true,
+  test('combines separate date and time columns instead of collapsing to midnight', async () => {
+    const file = new File(
+      [
+        [
+          'Date,Time,Glucose (mg/dL)',
+          ...Array.from({ length: 12 }, (_, index) => {
+            const minute = (index % 6) * 5;
+            const hour = 8 + Math.floor(index / 6);
+            return `27.10.2026,${hour}:${String(minute).padStart(2, '0')},${100 + index}`;
+          }),
+        ].join('\n'),
+      ],
+      'split-date-time.csv',
+      { type: 'text/csv' },
     );
 
+    const outcome = await parseFile(file);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.dataset.readings).toHaveLength(5);
-    expect(outcome.warnings.join(' ')).toContain('too small for a representative glycemic report');
+    expect(outcome.dataset.readings).toHaveLength(12);
+    expect(outcome.dataset.readings[0].v).toBe(100);
+    expect(outcome.dataset.readings[11].v).toBe(111);
   });
 
-  test('counts the valid readings when a CSV is too small', async () => {
+  test('analyzes a tiny CSV instead of blocking it', async () => {
     const file = new File(
       [
         ['time,glucose', '27.10.2026 08:00,142', '27.10.2026 08:05,138', '27.10.2026 08:10,131'].join(
@@ -208,23 +238,6 @@ describe('PDF report imports', () => {
     );
 
     const outcome = await parseFile(file);
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.error).toContain('Only 3 valid glucose readings were found');
-  });
-
-  test('analyzes a tiny CSV when the user explicitly allows it', async () => {
-    const file = new File(
-      [
-        ['time,glucose', '27.10.2026 08:00,142', '27.10.2026 08:05,138', '27.10.2026 08:10,131'].join(
-          '\n',
-        ),
-      ],
-      'few.csv',
-      { type: 'text/csv' },
-    );
-
-    const outcome = await parseFile(file, { allowSparse: true });
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.dataset.readings).toHaveLength(3);
