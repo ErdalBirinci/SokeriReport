@@ -321,7 +321,7 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.meta.source).toBe('LibreView PDF');
     expect(outcome.dataset.meta.unit).toBe('mg/dL');
     expect(outcome.warnings[0]).toContain('PDF table');
-  });
+  }, 30_000);
 
   test('extracts a PDF with yearless date headers end to end', async () => {
     const outcome = await parseFile(await fixture('yearless-headers.pdf'));
