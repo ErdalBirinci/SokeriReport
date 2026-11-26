@@ -57,10 +57,10 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
           </h1>
 
           <p className="hero-lead">
-            Drop in your LibreView, Dexcom Clarity or Nightscout export. TIR, glycemic variability,
-            the dawn phenomenon and your most frequent hypoglycemia hours become a clean, one-page
-            report for your doctor — for the last 14 days, 1 month or 3 months. The file never
-            leaves your browser.
+            Drop in your LibreView, Dexcom Clarity or Nightscout export — CSV, JSON, or a PDF with a
+            glucose readings table. TIR, glycemic variability, the dawn phenomenon and your most
+            frequent hypoglycemia hours become a clean, one-page report for your doctor — for the
+            last 14 days, 1 month or 3 months. The file never leaves your browser.
           </p>
 
           <div className="drop-wrap">
@@ -228,7 +228,7 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
       <section className="proof-strip" aria-label="Report capabilities">
         <div className="proof-item">
           <b>3 formats</b>
-          <span>LibreView, Dexcom, Nightscout</span>
+          <span>CSV, JSON and PDF tables</span>
         </div>
         <div className="proof-item">
           <b>14d · 1m · 3m</b>
@@ -257,7 +257,7 @@ export default function Landing({ onFiles, onDemo, busy }: Props) {
             <h3>Download it from your device</h3>
             <p>
               In LibreView export the “Glucose Data” CSV, in Clarity the “Export” CSV, in Nightscout
-              the entries JSON. No editing is required.
+              the entries JSON. A PDF with a date/time + glucose table works too.
             </p>
           </div>
 

@@ -36,6 +36,11 @@ export default defineConfig({
       },
     },
   ],
+  worker: {
+    // parse.worker.ts dynamically imports the PDF extractor, which needs an ES
+    // module worker (the IIFE default cannot code-split).
+    format: 'es',
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

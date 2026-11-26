@@ -11,7 +11,15 @@ export async function parseFileAsync(
   file: File,
   options: ParseOptions = {},
 ): Promise<ParseOutcome> {
-  if (file.size < WORKER_LIMIT || typeof Worker === 'undefined') {
+  // PDF text extraction already runs in pdf.js's own worker, and keeping it on
+  // the main thread preserves that worker path. Everything else follows the
+  // size threshold below.
+  if (
+    file.type === 'application/pdf' ||
+    /\.pdf$/i.test(file.name) ||
+    file.size < WORKER_LIMIT ||
+    typeof Worker === 'undefined'
+  ) {
     return parseFile(file, options);
   }
 
