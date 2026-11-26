@@ -281,7 +281,8 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.meta.unit).toBe('mmol/L');
     // 5.5 mmol/L with a decimal comma must survive as 99 mg/dL, not 5 mg/dL.
     expect(outcome.dataset.readings[0].v).toBe(99);
-    expect(outcome.warnings.join(' ')).toContain('mmol/L');
+    expect(outcome.warnings.join(' ')).toContain('normalised to mg/dL');
+    expect(outcome.warnings.join(' ')).toContain('opens in mmol/L');
   });
 
   test('rejects summary PDFs with export guidance instead of parsing chart labels', () => {

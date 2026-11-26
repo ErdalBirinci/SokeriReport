@@ -325,7 +325,9 @@ function finalize(
     warnings.push('Data is shorter than the 14-day minimum for a standard CGM report.');
   }
   if (isMmol) {
-    warnings.push('Glucose values were read as mmol/L and converted to mg/dL.');
+    warnings.push(
+      'Glucose values were read as mmol/L and normalised to mg/dL for every calculation; the report opens in mmol/L, the unit this file uses.',
+    );
   }
 
   const dataset: Dataset = {
