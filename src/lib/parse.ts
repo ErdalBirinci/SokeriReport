@@ -698,6 +698,34 @@ const MONTHS: Record<string, string> = {
   oct: '10',
   nov: '11',
   dec: '12',
+  // Common abbreviations in European report exports.
+  oca: '01',
+  şub: '02',
+  sub: '02',
+  nis: '04',
+  haz: '06',
+  tem: '07',
+  ağu: '08',
+  agu: '08',
+  eyl: '09',
+  eki: '10',
+  kas: '11',
+  ara: '12',
+  mär: '03',
+  marz: '03',
+  mai: '05',
+  okt: '10',
+  dez: '12',
+  ene: '01',
+  abr: '04',
+  ago: '08',
+  dic: '12',
+  gen: '01',
+  mag: '05',
+  giu: '06',
+  lug: '07',
+  set: '09',
+  ott: '10',
 };
 
 function pdfUnit(text: string): 'mg/dL' | 'mmol/L' | undefined {
@@ -755,30 +783,54 @@ function hasPdfReadingsTable(lines: string[], text: string): boolean {
   });
 }
 
-/** A line that only carries a date resets the context for daily-log tables. */
+function normaliseYear(raw: string): string | null {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  const year = value < 100 ? 2000 + value : value;
+  return year >= 1900 && year <= 2200 ? String(year) : null;
+}
+
+/**
+ * A line that only carries a date resets the context for daily-log tables.
+ * Report headers often omit the year under a printed report period ("28 Oct",
+ * "Oct 28", "28.10."), so fall back to the year found elsewhere in the PDF.
+ * Missing those headers reused the previous day's date and made the same times
+ * look like duplicates, which silently discarded readings.
+ */
 function pdfDateHeader(line: string, fallbackYear: string | null): string | null {
-  const stripped = line.replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.]?\s+/i, '');
+  const stripped = line
+    .replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.]?\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  const numeric = stripped.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
-  if (numeric) return `${numeric[1]}.${numeric[2]}.${numeric[3]}`;
-
-  const iso = stripped.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const iso = stripped.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})\.?$/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
 
-  const named = stripped.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/);
+  const numeric = stripped.match(
+    /^(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\.?$/,
+  );
+  if (numeric) {
+    const year = numeric[3] ? normaliseYear(numeric[3]) : fallbackYear;
+    if (year) return `${numeric[1]}.${numeric[2]}.${year}`;
+  }
+
+  const named = stripped.match(
+    /^(\d{1,2})[\s./-]+([A-Za-zÀ-ÿĀ-ž]{3,12})\.?(?:[\s./,-]+(\d{2,4}))?$/,
+  );
   if (named) {
     const month = MONTHS[named[2].slice(0, 3).toLowerCase()];
-    if (month) return `${named[1]}.${month}.${named[3]}`;
+    const year = named[3] ? normaliseYear(named[3]) : fallbackYear;
+    if (month && year) return `${named[1]}.${month}.${year}`;
   }
 
-  const american = stripped.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/);
+  const american = stripped.match(
+    /^([A-Za-zÀ-ÿĀ-ž]{3,12})[\s./-]+(\d{1,2}),?(?:[\s./,-]+(\d{2,4}))?$/,
+  );
   if (american) {
     const month = MONTHS[american[1].slice(0, 3).toLowerCase()];
-    if (month) return `${american[2]}.${month}.${american[3]}`;
+    const year = american[3] ? normaliseYear(american[3]) : fallbackYear;
+    if (month && year) return `${american[2]}.${month}.${year}`;
   }
-
-  const short = stripped.match(/^(\d{1,2})[./-](\d{1,2})$/);
-  if (short && fallbackYear) return `${short[1]}.${short[2]}.${fallbackYear}`;
 
   return null;
 }
@@ -809,7 +861,9 @@ export function parsePdfLines(
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? null;
+  // A year usually appears in the report period. If it does not, use the
+  // current year rather than refusing every date header that omits it.
+  const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
 
   if (!hasPdfReadingsTable(lines, text)) {
     return fail(pdfSummaryMessage(text));
@@ -826,23 +880,29 @@ export function parsePdfLines(
       continue;
     }
 
-    const full = line.match(
-      /^(?:\d{1,4}\s+)?(\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})[ ,T]+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
+    // A reading row is "date time value", or "time value" under a date
+    // header. Accept named months, hyphens, commas and row numbers so the
+    // table layout does not decide whether a reading survives.
+    const row = line.match(
+      /^(.*?)\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)[,\s]+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
     );
-    if (full) {
-      currentDate = full[1];
-      const value = pdfNumeric(full[3]);
-      if (value !== null) rows.push({ time: `${full[1]} ${full[2]}`, value });
-      continue;
-    }
+    if (!row) continue;
 
-    const timed = line.match(
-      /^(?:\d{1,4}\s+)?(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
-    );
-    if (timed && currentDate) {
-      const value = pdfNumeric(timed[2]);
-      if (value !== null) rows.push({ time: `${currentDate} ${timed[1]}`, value });
+    const prefix = row[1]
+      .trim()
+      .replace(/^\d{1,4}\s+/, '')
+      .replace(/[,;]$/, '');
+    let date = currentDate;
+    if (prefix) {
+      const parsed = pdfDateHeader(prefix, fallbackYear);
+      if (!parsed) continue;
+      date = parsed;
+      currentDate = parsed;
     }
+    if (!date) continue;
+
+    const value = pdfNumeric(row[3]);
+    if (value !== null) rows.push({ time: `${date} ${row[2]}`, value });
   }
 
   if (!rows.length) return fail(pdfSummaryMessage(text));
@@ -852,7 +912,9 @@ export function parsePdfLines(
 
   const unit = pdfUnit(text);
   const header = unit ? `time,glucose (${unit})` : 'time,glucose';
-  const csv = `${header}\n${rows.map((row) => `${row.time},${row.value}`).join('\n')}`;
+  // Quote both fields: named dates ("Oct 27, 2026") and decimal commas in
+  // mmol/L values would otherwise be split into extra CSV columns.
+  const csv = `${header}\n${rows.map((row) => `"${row.time.replace(/"/g, '""')}","${row.value}"`).join('\n')}`;
   const source = /libreview|freestyle libre/i.test(text)
     ? 'LibreView PDF'
     : /dexcom|clarity/i.test(text)
@@ -861,10 +923,14 @@ export function parsePdfLines(
         ? 'Nightscout PDF'
         : 'PDF report';
 
-  const outcome = parseGenericCsv(csv, fileName, override, source, allowSparse);
+  // A table with at least eight rows is a real readings table; if duplicate
+  // timestamps or a few invalid values reduce it, analyze the remainder with a
+  // warning instead of sending the user back to the export screen.
+  const outcome = parseGenericCsv(csv, fileName, override, source, allowSparse || rows.length >= 8);
   if (!outcome.ok) {
+    const uniqueTimes = new Set(rows.map((row) => row.time)).size;
     return fail(
-      `The PDF table produced ${rows.length} rows, but fewer than 8 usable readings remained after removing duplicates or invalid values. Export the raw CSV/JSON for a complete report.`,
+      `The PDF table produced ${rows.length} rows with ${uniqueTimes} distinct timestamps, but no usable glucose readings remained. Export the raw CSV/JSON for a complete report.`,
     );
   }
   outcome.warnings.unshift(

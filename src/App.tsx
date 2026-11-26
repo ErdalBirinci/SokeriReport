@@ -118,7 +118,7 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setError(outcome.error);
-      if (!options.allowSparse && /at least 8/.test(outcome.error)) setSparseFile(file);
+      if (!options.allowSparse && /at least 8|fewer than 8/.test(outcome.error)) setSparseFile(file);
     }
     setBusy(false);
   }, []);

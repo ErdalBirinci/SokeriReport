@@ -62,6 +62,54 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.readings[11].v).toBe(121);
   });
 
+  test('keeps every day when date headers omit the year', () => {
+    const dayRows = (base: number): string[] =>
+      Array.from({ length: 8 }, (_, index) => {
+        const minute = index * 5;
+        return `08:${String(minute).padStart(2, '0')} ${base + index}`;
+      });
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Daily Log',
+        'Time Glucose (mg/dL)',
+        '27-Oct-2026',
+        ...dayRows(100),
+        '28 Oct',
+        ...dayRows(120),
+        '2026/10/29',
+        ...dayRows(140),
+        'Oct-30',
+        ...dayRows(160),
+      ),
+      'daily-no-year.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(32);
+    const days = new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString()));
+    expect(days.size).toBe(4);
+  });
+
+  test('reads full rows with a named month', () => {
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Glucose Readings',
+        'Date/Time Glucose (mg/dL)',
+        ...Array.from({ length: 12 }, (_, index) => {
+          const minute = (index % 6) * 5;
+          const hour = 8 + Math.floor(index / 6);
+          return `27-Oct-2026 ${hour}:${String(minute).padStart(2, '0')} ${100 + index}`;
+        }),
+      ),
+      'named.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(12);
+  });
+
   test('converts a mmol/L readings table to mg/dL', () => {
     const outcome = parsePdfLines(
       page(
@@ -80,7 +128,8 @@ describe('PDF report imports', () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.dataset.meta.unit).toBe('mmol/L');
-    expect(outcome.dataset.readings[0].v).toBeGreaterThan(90);
+    // 5.5 mmol/L with a decimal comma must survive as 99 mg/dL, not 5 mg/dL.
+    expect(outcome.dataset.readings[0].v).toBe(99);
     expect(outcome.warnings.join(' ')).toContain('mmol/L');
   });
 
@@ -115,6 +164,22 @@ describe('PDF report imports', () => {
     if (outcome.ok) return;
     expect(outcome.error).toContain('only 5 usable glucose readings');
     expect(outcome.error).toContain('at least 8');
+  });
+
+  test('analyzes a table whose rows collapse to a small unique sample', () => {
+    const outcome = parsePdfLines(
+      page(
+        'Glucose Readings',
+        'Date/Time Glucose (mg/dL)',
+        ...Array.from({ length: 19 }, (_, index) => `27.10.2026 08:00 ${100 + index}`),
+      ),
+      'duplicates.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(1);
+    expect(outcome.warnings.join(' ')).toContain('too small for a representative glycemic report');
   });
 
   test('analyzes a tiny PDF when the user explicitly allows it', () => {
@@ -182,6 +247,16 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.meta.source).toBe('LibreView PDF');
     expect(outcome.dataset.meta.unit).toBe('mg/dL');
     expect(outcome.warnings[0]).toContain('PDF table');
+  });
+
+  test('extracts a PDF with yearless date headers end to end', async () => {
+    const outcome = await parseFile(await fixture('yearless-headers.pdf'));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(19);
+    const days = new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString()));
+    expect(days.size).toBe(3);
   });
 
   test('extracts a daily-log PDF with date headers', async () => {
