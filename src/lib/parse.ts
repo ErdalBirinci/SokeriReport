@@ -894,6 +894,90 @@ const MONTHS: Record<string, string> = {
   out: '10',
 };
 
+const PDF_DAY_HEADER =
+  /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Pazartesi|Salı|Sali|Çarşamba|Carsamba|Perşembe|Persembe|Cuma|Cumartesi|Pazar|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\s+(\d{1,2})\s+([A-Za-zÀ-ÿĀ-ž]{3,12})\b/gi;
+
+function pdfNumbers(text: string, unit: 'mg/dL' | 'mmol/L'): number[] {
+  const low = unit === 'mmol/L' ? 1 : 10;
+  const high = unit === 'mmol/L' ? 30 : 600;
+  return [...text.matchAll(/[<>]?\d{1,3}(?:[.,]\d+)?/g)]
+    .map((match) => toNumber(match[0]))
+    .filter((value): value is number => value !== null && value >= low && value <= high);
+}
+
+/**
+ * LibreView's Daily Log prints one graph per day with hourly Max and Min
+ * labels, not a date/time/value table. The values are still glucose readings
+ * (two per hour), so use them when no row table exists and say clearly that
+ * they are graph extrema rather than the original 5-minute series.
+ */
+function pdfDailyLogRows(
+  text: string,
+  fallbackYear: string,
+): { rows: Array<{ time: string; value: number }>; unit: 'mg/dL' | 'mmol/L'; days: number } | null {
+  const normalized = text.replace(/\s+/g, ' ');
+  const matches = [...normalized.matchAll(PDF_DAY_HEADER)];
+  const rows: Array<{ time: string; value: number }> = [];
+  let unit: 'mg/dL' | 'mmol/L' = 'mmol/L';
+  let days = 0;
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? normalized.length;
+    const body = normalized.slice(start, end);
+    if (!/Max/i.test(body) || !/Min/i.test(body)) continue;
+
+    const month = MONTHS[match[3].slice(0, 3).toLowerCase()];
+    if (!month) continue;
+    const date = `${match[2]}.${month}.${fallbackYear}`;
+    const sectionUnit: 'mg/dL' | 'mmol/L' = /Glucose\s+mmol\s*\/\s*L/i.test(body)
+      ? 'mmol/L'
+      : /mg\s*\/\s*dL/i.test(body)
+        ? 'mg/dL'
+        : unit;
+    unit = sectionUnit;
+
+    // Drop clock labels before collecting values; "00:00" would otherwise add
+    // two numeric tokens per hour to the graph data.
+    const cleaned = body.replace(/\d{1,2}:\d{2}(?::\d{2})?/g, ' ');
+    const maxAt = cleaned.search(/Max/i);
+    const minAt = cleaned.search(/Min/i);
+    if (maxAt < 0 || minAt < 0 || minAt <= maxAt) continue;
+
+    const axis =
+      sectionUnit === 'mmol/L'
+        ? /0\s+3[.,]9\s+10[.,]0\s+21[.,]0/
+        : /0\s+70\s+180\s+250/;
+    const maxPart = cleaned.slice(0, maxAt);
+    const axisMatch = axis.exec(maxPart);
+    let maxValues = pdfNumbers(
+      axisMatch ? maxPart.slice(axisMatch.index + axisMatch[0].length) : maxPart,
+      sectionUnit,
+    );
+    let minValues = pdfNumbers(cleaned.slice(maxAt, minAt), sectionUnit);
+
+    // Some layouts put the Max and Min labels before their value rows. Retry
+    // with the label as the start of the row when the usual order finds no data.
+    if (maxValues.length < 6 || minValues.length < 6) {
+      const between = pdfNumbers(cleaned.slice(maxAt, minAt), sectionUnit);
+      const afterMin = pdfNumbers(cleaned.slice(minAt), sectionUnit);
+      if (maxValues.length < 6 && between.length >= 6) maxValues = between;
+      if (minValues.length < 6 && afterMin.length >= 6) minValues = afterMin;
+    }
+    const count = Math.min(maxValues.length, minValues.length, 24);
+    if (count < 6) continue;
+
+    for (let hour = 0; hour < count; hour += 1) {
+      rows.push({ time: `${date} ${String(hour).padStart(2, '0')}:00`, value: maxValues[hour] });
+      rows.push({ time: `${date} ${String(hour).padStart(2, '0')}:30`, value: minValues[hour] });
+    }
+    days += 1;
+  }
+
+  return rows.length ? { rows, unit, days } : null;
+}
+
 function pdfUnit(text: string): 'mg/dL' | 'mmol/L' | undefined {
   // Read the unit from the glucose header, not from any target/legend line:
   // LibreView reports often mention mmol/L in a footnote while the table is mg/dL.
@@ -1163,6 +1247,57 @@ export function parsePdfLines(
   // A year usually appears in the report period. If it does not, use the
   // current year rather than refusing every date header that omits it.
   const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
+
+  const daily = pdfDailyLogRows(text, fallbackYear);
+  if (daily) {
+    const dateInfo = dateSetup(daily.rows.map((row) => row.time), override);
+    const readings: Reading[] = [];
+    let skipped = 0;
+    for (const row of daily.rows) {
+      const t = dateInfo.dateOf(row.time);
+      if (t === null) {
+        skipped += 1;
+        continue;
+      }
+      readings.push({ t, v: row.value, kind: 'cgm' });
+    }
+
+    const source = /libreview|freestyle libre/i.test(text) ? 'LibreView PDF' : 'PDF report';
+    const warnings = [
+      `Read ${daily.days} ${daily.days === 1 ? 'day' : 'days'} of hourly min/max glucose from the PDF Daily Log graph.`,
+      'The PDF prints hourly Max/Min graph values, not the original 5-minute sensor readings; metrics are approximate.',
+      ...dateInfo.warnings,
+    ];
+    if (skipped > 0) warnings.push(`${skipped} PDF graph rows skipped because the date could not be read.`);
+
+    const outcome = finalize(
+      readings,
+      [],
+      [],
+      {
+        source,
+        fileName,
+        unit: daily.unit,
+        date: dateInfo.meta,
+        time: dateInfo.time,
+      },
+      warnings,
+      daily.unit,
+      {
+        rows: daily.rows.length,
+        dates: readings.length,
+        values: daily.rows.length,
+        removed: skipped
+          ? [{ label: 'skipped: the PDF date could not be read', count: skipped }]
+          : [],
+        notes: [
+          `Daily Log days: ${daily.days}`,
+          'Values are the hourly Max/Min labels printed on the LibreView graph.',
+        ],
+      },
+    );
+    if (outcome.ok) return outcome;
+  }
 
   if (!hasPdfReadingsTable(lines, text)) {
     return fail(

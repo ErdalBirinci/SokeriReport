@@ -191,6 +191,32 @@ describe('PDF report imports', () => {
     expect(new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString())).size).toBe(2);
   });
 
+  test('reads the hourly Max/Min values from a LibreView Daily Log graph', () => {
+    const day = (weekday: string, dayOfMonth: number, start: number): string => {
+      const max = Array.from({ length: 24 }, (_, hour) => (start + hour * 0.1).toFixed(1));
+      const min = max.map((value) => (Number(value) - 1.5).toFixed(1));
+      return `${weekday} ${dayOfMonth} NOVEMBER Glucose mmol/L 00:00 02:00 04:00 06:00 08:00 10:00 12:00 14:00 16:00 18:00 20:00 22:00 00:00 0 3.9 10.0 21.0 ${max.join(' ')}Max mmol/L ${min.join(' ')}Min mmol/L`;
+    };
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Daily Log 14 Days 13 Nov 2026 - 26 Nov 2026',
+        'Average Glucose 7.6 mmol/L',
+        day('FRI', 13, 10),
+        day('SAT', 14, 8),
+        'Legend Max Min',
+      ),
+      'daily-log-graph.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(96);
+    expect(outcome.dataset.meta.unit).toBe('mmol/L');
+    expect(outcome.dataset.readings[0].v).toBe(180);
+    expect(outcome.dataset.readings[1].v).toBe(153);
+    expect(outcome.warnings.join(' ')).toContain('hourly Max/Min');
+  });
+
   test('converts a mmol/L readings table to mg/dL', () => {
     const outcome = parsePdfLines(
       page(
