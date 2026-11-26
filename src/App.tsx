@@ -15,6 +15,7 @@ import {
 import { buildDemoDataset } from './lib/demo';
 import type { GlucoseUnit } from './lib/glucose';
 import { computeMetrics, type TargetProfileId } from './lib/metrics';
+import type { ParseOptions } from './lib/parse';
 import { parseFileAsync } from './lib/parseAsync';
 import {
   availablePeriods,
@@ -43,6 +44,8 @@ export default function App() {
   const [note, setNote] = useState('');
   const [summaryOverride, setSummaryOverride] = useState<string | null>(null);
   const [printCheck, setPrintCheck] = useState<PrintPreflight | null>(null);
+  const [sparseFile, setSparseFile] = useState<File | null>(null);
+  const [allowSparse, setAllowSparse] = useState(false);
 
   const [profile, setProfile] = useState<TargetProfileId>('standard');
   const [unit, setUnit] = useState<GlucoseUnit>('mg/dL');
@@ -89,7 +92,7 @@ export default function App() {
   );
   const summary = summaryOverride ?? autoSummary;
 
-  const handleFiles = useCallback(async (files: File[]) => {
+  const handleFiles = useCallback(async (files: File[], options: ParseOptions = {}) => {
     const file = files[0];
     if (!file) return;
     const request = parseToken.current + 1;
@@ -97,7 +100,9 @@ export default function App() {
     setBusy(true);
     setReordering(false);
     setError(null);
-    const outcome = await parseFileAsync(file);
+    setSparseFile(null);
+    setAllowSparse(Boolean(options.allowSparse));
+    const outcome = await parseFileAsync(file, options);
     // A newer drop or a reset has taken over; do not overwrite its state.
     if (request !== parseToken.current) return;
     if (outcome.ok) {
@@ -113,6 +118,7 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setError(outcome.error);
+      if (!options.allowSparse && /at least 8/.test(outcome.error)) setSparseFile(file);
     }
     setBusy(false);
   }, []);
@@ -123,6 +129,7 @@ export default function App() {
     const request = compareToken.current + 1;
     compareToken.current = request;
     setError(null);
+    setSparseFile(null);
     setBusy(true);
     const outcome = await parseFileAsync(file);
     if (request !== compareToken.current) return;
@@ -245,6 +252,8 @@ export default function App() {
       setSourceFile(null);
       setPrevious(null);
       setPrintCheck(null);
+      setSparseFile(null);
+      setAllowSparse(false);
       const archiveNotes = ['Opened from the encrypted local archive.'];
       if (payload.dataset.meta.date.uncertain) {
         // Re-parsing needs the original export, which the archive does not hold.
@@ -285,7 +294,7 @@ export default function App() {
       parseToken.current = request;
       setReordering(true);
       setError(null);
-      const outcome = await parseFileAsync(sourceFile, { dateOrder: order });
+      const outcome = await parseFileAsync(sourceFile, { dateOrder: order, allowSparse });
       if (request !== parseToken.current) return;
       if (outcome.ok) {
         setDataset(outcome.dataset);
@@ -301,7 +310,7 @@ export default function App() {
       }
       setReordering(false);
     },
-    [sourceFile],
+    [sourceFile, allowSparse],
   );
 
   const changeProfile = useCallback((id: TargetProfileId) => {
@@ -331,6 +340,8 @@ export default function App() {
     setSourceFile(null);
     setPrevious(null);
     setPrintCheck(null);
+    setSparseFile(null);
+    setAllowSparse(false);
     setDataset(demo);
     setPeriod(defaultPeriod(demo));
     setWarnings([
@@ -349,6 +360,8 @@ export default function App() {
     setSourceFile(null);
     setPrevious(null);
     setPrintCheck(null);
+    setSparseFile(null);
+    setAllowSparse(false);
     setDataset(null);
     setPeriod('14d');
     setWarnings([]);
@@ -522,6 +535,21 @@ export default function App() {
           </span>
           <div>
             <strong>Could not analyze the file.</strong> {error}
+            {sparseFile && (
+              <div className="error-action">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => {
+                    const file = sparseFile;
+                    setSparseFile(null);
+                    void handleFiles([file], { allowSparse: true });
+                  }}
+                >
+                  Analyze this small sample
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
