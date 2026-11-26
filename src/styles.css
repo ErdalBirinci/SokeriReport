@@ -267,6 +267,10 @@ input {
   box-shadow: 0 0 0 1px rgba(224, 71, 95, 0.2), 0 10px 22px -18px rgba(224, 71, 95, 0.8);
 }
 
+.error-action {
+  margin-top: 9px;
+}
+
 .error-icon {
   flex: 0 0 22px;
   width: 22px;

@@ -242,6 +242,8 @@ function finalize(
   warnings: string[],
   /** Unit stated by the column headers; beats guessing from the value spread. */
   unitHint?: 'mg/dL' | 'mmol/L',
+  /** The user explicitly accepted a sample smaller than eight readings. */
+  allowSparse = false,
 ): ParseOutcome {
   const valid = readings.filter((r) => Number.isFinite(r.t) && r.v > 0 && r.v < 800);
   if (!valid.length) {
@@ -262,7 +264,14 @@ function finalize(
   }
 
   if (deduped.length < 8) {
-    return fail('Not enough readings to analyze (at least 8 glucose values are required).');
+    if (!allowSparse) {
+      return fail(
+        `Only ${deduped.length} valid glucose reading${deduped.length === 1 ? ' was' : 's were'} found; at least 8 are required for a report. Export a longer date range or check that the file contains individual readings.`,
+      );
+    }
+    warnings.push(
+      `Only ${deduped.length} glucose readings were analyzed. This sample is too small for a representative glycemic report; do not use it for treatment decisions.`,
+    );
   }
 
   const sorted = deduped.map((r) => r.v).sort((a, b) => a - b);
@@ -297,7 +306,12 @@ function finalize(
   return { ok: true, dataset, warnings };
 }
 
-function parseLibreView(text: string, fileName: string, override?: DateOrder): ParseOutcome {
+function parseLibreView(
+  text: string,
+  fileName: string,
+  override?: DateOrder,
+  allowSparse = false,
+): ParseOutcome {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((line) => {
     if (line.split(/[;,\t]/).length < 4) return false;
@@ -400,10 +414,16 @@ function parseLibreView(text: string, fileName: string, override?: DateOrder): P
     },
     warnings,
     unitHint,
+    allowSparse,
   );
 }
 
-function parseDexcom(text: string, fileName: string, override?: DateOrder): ParseOutcome {
+function parseDexcom(
+  text: string,
+  fileName: string,
+  override?: DateOrder,
+  allowSparse = false,
+): ParseOutcome {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex(
     (line) => line.split(/[;,\t]/).length >= 4 && TEXT.eventType.test(line) && TEXT.glucose.test(line),
@@ -480,10 +500,11 @@ function parseDexcom(text: string, fileName: string, override?: DateOrder): Pars
     },
     warnings,
     unitHint,
+    allowSparse,
   );
 }
 
-function parseNightscout(text: string, fileName: string): ParseOutcome {
+function parseNightscout(text: string, fileName: string, allowSparse = false): ParseOutcome {
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -595,6 +616,8 @@ function parseNightscout(text: string, fileName: string): ParseOutcome {
       time: { absolute: absolute && !wallClock, utc },
     },
     warnings,
+    undefined,
+    allowSparse,
   );
 }
 
@@ -603,6 +626,7 @@ function parseGenericCsv(
   fileName: string,
   override?: DateOrder,
   source = 'Generic CSV',
+  allowSparse = false,
 ): ParseOutcome {
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
@@ -653,6 +677,7 @@ function parseGenericCsv(
     },
     warnings,
     unitHint,
+    allowSparse,
   );
 }
 
@@ -707,6 +732,10 @@ function pdfSummaryFacts(text: string): string {
   if (gmi) facts.push(`GMI ${gmi[1]}%`);
 
   return facts.length ? ` The PDF does report ${facts.join(', ')}, but those are summary values.` : '';
+}
+
+function pdfTooFewMessage(count: number, text: string): string {
+  return `The PDF contains only ${count} usable glucose reading${count === 1 ? '' : 's'}; at least 8 are needed for a report.${pdfSummaryFacts(text)} Export a longer date range, or the raw data (LibreView → Download CSV; Dexcom Clarity → Export → CSV; Nightscout → JSON).`;
 }
 
 function pdfSummaryMessage(text: string): string {
@@ -767,6 +796,7 @@ export function parsePdfLines(
   pages: string[],
   fileName: string,
   override?: DateOrder,
+  allowSparse = false,
 ): ParseOutcome {
   const text = pages.join('\n').trim();
   if (!text) {
@@ -817,10 +847,7 @@ export function parsePdfLines(
 
   if (!rows.length) return fail(pdfSummaryMessage(text));
   if (rows.length < 8) {
-    if (PDF_SUMMARY.test(text)) return fail(pdfSummaryMessage(text));
-    return fail(
-      `Only ${rows.length} glucose readings could be read from the PDF; at least 8 are required. Use the original CSV or JSON export for a complete report.`,
-    );
+    if (!allowSparse) return fail(pdfTooFewMessage(rows.length, text));
   }
 
   const unit = pdfUnit(text);
@@ -834,12 +861,15 @@ export function parsePdfLines(
         ? 'Nightscout PDF'
         : 'PDF report';
 
-  const outcome = parseGenericCsv(csv, fileName, override, source);
-  if (outcome.ok) {
-    outcome.warnings.unshift(
-      `Read ${rows.length} glucose readings from the PDF table. Check the report against the original PDF.`,
+  const outcome = parseGenericCsv(csv, fileName, override, source, allowSparse);
+  if (!outcome.ok) {
+    return fail(
+      `The PDF table produced ${rows.length} rows, but fewer than 8 usable readings remained after removing duplicates or invalid values. Export the raw CSV/JSON for a complete report.`,
     );
   }
+  outcome.warnings.unshift(
+    `Read ${rows.length} glucose readings from the PDF table. Check the report against the original PDF.`,
+  );
   return outcome;
 }
 
@@ -871,30 +901,37 @@ function pdfErrorMessage(error: unknown): string {
   return `Could not read the PDF: ${message || 'unknown error'}`;
 }
 
-function parseText(text: string, fileName: string, override?: DateOrder): ParseOutcome {
+function parseText(
+  text: string,
+  fileName: string,
+  override?: DateOrder,
+  allowSparse = false,
+): ParseOutcome {
   const trimmed = text.replace(/^\uFEFF/, '').trim();
   if (!trimmed) return fail('The file looks empty.');
 
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return parseNightscout(trimmed, fileName);
+    return parseNightscout(trimmed, fileName, allowSparse);
   }
 
   const head = trimmed.slice(0, 8000);
   if (TEXT.eventType.test(head) && TEXT.glucose.test(head)) {
-    return parseDexcom(trimmed, fileName, override);
+    return parseDexcom(trimmed, fileName, override, allowSparse);
   }
   if (TEXT.recordType.test(head) && TEXT.glucose.test(head)) {
-    return parseLibreView(trimmed, fileName, override);
+    return parseLibreView(trimmed, fileName, override, allowSparse);
   }
   if (/device\s*timestamp|ger[äa]tezeitstempel|cihaz\s*zaman/i.test(head)) {
-    return parseLibreView(trimmed, fileName, override);
+    return parseLibreView(trimmed, fileName, override, allowSparse);
   }
-  return parseGenericCsv(trimmed, fileName, override);
+  return parseGenericCsv(trimmed, fileName, override, 'Generic CSV', allowSparse);
 }
 
 export interface ParseOptions {
   /** Force a date order instead of the one inferred from the file. */
   dateOrder?: DateOrder;
+  /** Analyze a sample with fewer than eight readings after explicit consent. */
+  allowSparse?: boolean;
 }
 
 export async function parseFile(file: File, options: ParseOptions = {}): Promise<ParseOutcome> {
@@ -911,14 +948,19 @@ export async function parseFile(file: File, options: ParseOptions = {}): Promise
       try {
         const { extractPdfText } = await import('./pdf');
         const extracted = await extractPdfText(buffer);
-        return parsePdfLines(extracted.pages, file.name, options.dateOrder);
+        return parsePdfLines(
+          extracted.pages,
+          file.name,
+          options.dateOrder,
+          options.allowSparse,
+        );
       } catch (error) {
         return fail(pdfErrorMessage(error));
       }
     }
 
     const { text, encoding } = decodeBuffer(buffer);
-    const outcome = parseText(text, file.name, options.dateOrder);
+    const outcome = parseText(text, file.name, options.dateOrder, options.allowSparse);
     if (outcome.ok && !encoding.startsWith('UTF-8')) {
       outcome.warnings.unshift(`File read as ${encoding} and converted to UTF-8.`);
     }

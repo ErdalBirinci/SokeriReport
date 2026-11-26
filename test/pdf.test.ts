@@ -105,6 +105,67 @@ describe('PDF report imports', () => {
     expect(outcome.error).toContain('LibreView → Download CSV');
   });
 
+  test('explains a PDF table with fewer than eight readings', () => {
+    const outcome = parsePdfLines(
+      page('Glucose Readings', 'Date/Time Glucose (mg/dL)', ...readings(5)),
+      'few.pdf',
+    );
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error).toContain('only 5 usable glucose readings');
+    expect(outcome.error).toContain('at least 8');
+  });
+
+  test('analyzes a tiny PDF when the user explicitly allows it', () => {
+    const outcome = parsePdfLines(
+      page('Glucose Readings', 'Date/Time Glucose (mg/dL)', ...readings(5)),
+      'few.pdf',
+      undefined,
+      true,
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(5);
+    expect(outcome.warnings.join(' ')).toContain('too small for a representative glycemic report');
+  });
+
+  test('counts the valid readings when a CSV is too small', async () => {
+    const file = new File(
+      [
+        ['time,glucose', '27.10.2026 08:00,142', '27.10.2026 08:05,138', '27.10.2026 08:10,131'].join(
+          '\n',
+        ),
+      ],
+      'few.csv',
+      { type: 'text/csv' },
+    );
+
+    const outcome = await parseFile(file);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error).toContain('Only 3 valid glucose readings were found');
+  });
+
+  test('analyzes a tiny CSV when the user explicitly allows it', async () => {
+    const file = new File(
+      [
+        ['time,glucose', '27.10.2026 08:00,142', '27.10.2026 08:05,138', '27.10.2026 08:10,131'].join(
+          '\n',
+        ),
+      ],
+      'few.csv',
+      { type: 'text/csv' },
+    );
+
+    const outcome = await parseFile(file, { allowSparse: true });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(3);
+    expect(outcome.warnings.join(' ')).toContain('too small');
+  });
+
   test('explains when a PDF has no selectable text', () => {
     const outcome = parsePdfLines([], 'scan.pdf');
     expect(outcome.ok).toBe(false);
