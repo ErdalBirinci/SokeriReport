@@ -35,7 +35,9 @@ describe('real export corpus', () => {
     expect(outcome.dataset.insulin.filter((dose) => dose.kind === 'rapid')).toHaveLength(14);
     expect(outcome.dataset.insulin.filter((dose) => dose.kind === 'long')).toHaveLength(14);
     expect(outcome.dataset.carbs).toHaveLength(14);
-    expect(outcome.warnings.some((warning) => warning.includes('read as mmol/L'))).toBe(true);
+    const unitWarning = outcome.warnings.find((warning) => warning.includes('read as mmol/L'));
+    expect(unitWarning).toContain('normalised to mg/dL');
+    expect(unitWarning).toContain('opens in mmol/L');
   });
 
   test('Dexcom Clarity CSV with insulin and carbohydrate events', async () => {
