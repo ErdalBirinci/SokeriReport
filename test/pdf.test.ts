@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { parseFile, parsePdfLines } from '../src/lib/parse';
+import { extractPdfText } from '../src/lib/pdf';
 
 const fixture = async (name: string): Promise<File> => {
   const path = `test/fixtures/pdf/${name}`;
@@ -234,6 +235,23 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.readings).toHaveLength(48);
     expect(outcome.warnings[0]).toContain('Daily Log graph');
   });
+
+  test('extracts an embedded-font PDF whose clock colon is a private-use glyph', async () => {
+    // Synthetic LibreView page: Liberation Sans (OFL) is embedded as a subset and
+    // its ToUnicode maps ":" to U+E092, the glyph real LibreView exports use.
+    const file = await fixture('embedded-clock-glyph.pdf');
+    const extracted = await extractPdfText(await file.arrayBuffer());
+    expect(extracted.pages[0]).toContain('\uE09200');
+
+    const outcome = parsePdfLines(extracted.pages, 'embedded-clock-glyph.pdf');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(48);
+    expect(outcome.dataset.meta.unit).toBe('mmol/L');
+    expect(outcome.dataset.meta.source).toBe('LibreView PDF');
+    expect(outcome.warnings[0]).toContain('Daily Log graph');
+    expect(outcome.warnings.join(' ')).not.toContain('PDF table');
+  }, 20_000);
 
   test('reads clock labels whose colon is a private-use glyph', () => {
     const max = Array.from({ length: 24 }, (_, hour) => (7 + hour * 0.2).toFixed(1));
