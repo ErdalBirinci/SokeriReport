@@ -19,12 +19,21 @@ type PrintToggles = {
   questions: boolean;
 };
 
+type ProfileId = 'standard' | 'older';
+
+/** The goal phrase each profile must print in the report footer. */
+const PROFILE_GOALS: Record<ProfileId, string> = {
+  standard: 'TIR >70%',
+  older: 'TIR >50%',
+};
+
 interface Scenario {
   slug: string;
   previousDays: number;
   warning: boolean;
   options: PrintToggles;
   periods: Array<'1m' | '3m'>;
+  profile?: ProfileId;
 }
 
 const allSections: PrintToggles = { quality: true, comparison: true, questions: true };
@@ -40,6 +49,7 @@ const scenarios: Scenario[] = [
   { slug: 'warning-comparison-only', previousDays: 21, warning: true, options: onlyComparison, periods: ['1m'] },
   { slug: 'warning-questions-only', previousDays: 21, warning: true, options: onlyQuestions, periods: ['1m'] },
   { slug: 'warning-no-sections', previousDays: 21, warning: true, options: noSections, periods: ['1m'] },
+  { slug: 'older-profile', previousDays: 90, warning: false, options: noSections, periods: ['1m'], profile: 'older' },
 ];
 
 const artifactDir = join(process.cwd(), 'test-results', 'a4');
@@ -278,6 +288,24 @@ async function setPrintOptions(cdp: Cdp, options: PrintToggles): Promise<void> {
   );
 }
 
+async function setProfile(cdp: Cdp, profile: ProfileId): Promise<void> {
+  await cdp.evaluate(`(() => {
+    const select = document.querySelector('select[aria-label="Glucose target profile"]');
+    if (!select) throw new Error('Target profile selector not found');
+    select.value = '${profile}';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await waitForPage(
+    cdp,
+    `(() => {
+      const select = document.querySelector('select[aria-label="Glucose target profile"]');
+      const footer = document.querySelector('.report-foot')?.textContent ?? '';
+      return select?.value === '${profile}' && footer.includes(${JSON.stringify(PROFILE_GOALS[profile])});
+    })()`,
+    10_000,
+  );
+}
+
 async function selectPeriod(cdp: Cdp, scenario: Scenario, period: '1m' | '3m'): Promise<void> {
   const expectedDays = period === '1m' ? 30 : 90;
   await cdp.evaluate(`(() => {
@@ -365,6 +393,7 @@ async function runA4Test(chromePath: string): Promise<void> {
     for (const scenario of scenarios) {
       await uploadPrevious(cdp, scenario);
       await setPrintOptions(cdp, scenario.options);
+      await setProfile(cdp, scenario.profile ?? 'standard');
 
       for (const period of scenario.periods) {
         await selectPeriod(cdp, scenario, period);
@@ -373,6 +402,7 @@ async function runA4Test(chromePath: string): Promise<void> {
           const select = document.querySelector('select[aria-label="Report period"]');
           return {
             period: select?.value,
+            profile: document.querySelector('select[aria-label="Glucose target profile"]')?.value,
             reportSub: document.querySelector('.report-sub')?.textContent?.replace(/\\s+/g, ' ').trim(),
             warningText: document.querySelector('.comparison-warning')?.textContent?.replace(/\\s+/g, ' ').trim(),
             optionalSections: document.querySelectorAll('.print-optional:not(.print-hide)').length,
@@ -380,6 +410,7 @@ async function runA4Test(chromePath: string): Promise<void> {
         })()`);
 
         expect(state.period).toBe(period);
+        expect(state.profile).toBe(scenario.profile ?? 'standard');
         expect(state.reportSub).toContain(`${expectedDays} days`);
         expect(state.optionalSections).toBe(enabledSections(scenario.options));
         expect(Boolean(state.warningText)).toBe(scenario.warning);
@@ -423,13 +454,20 @@ async function runA4Test(chromePath: string): Promise<void> {
           }
 
           // The TIR/TAR goal policy is stated once, in the report footer. It
-          // must not reappear in the KPI card or the clinical summary.
+          // must not reappear in the KPI card or the clinical summary, and it
+          // must carry the selected profile's goal.
           const normalized = text.replace(/\s+/g, ' ');
           const goalMentions = normalized.match(/TIR >\d+%/g) ?? [];
           expect(goalMentions, `${scenario.slug}-${period}`).toHaveLength(1);
+          expect(goalMentions[0]).toBe(PROFILE_GOALS[scenario.profile ?? 'standard']);
           expect(normalized.indexOf(goalMentions[0])).toBeGreaterThan(
             normalized.lastIndexOf('ASSESSMENT'),
           );
+          if (scenario.profile === 'older') {
+            expect(normalized).toContain('TBR <1%');
+            expect(normalized).toContain('>180 <50%');
+            expect(normalized).toContain('>250 <10%');
+          }
         }
       }
     }
