@@ -9,19 +9,23 @@ export function buildSummary(
   patient: string,
   note: string,
   unit: GlucoseUnit = 'mg/dL',
+  options: { anonymise?: boolean } = {},
 ): string {
   const days = Math.max(1, Math.round(metrics.spanDays));
   const low = metrics.low + metrics.veryLow;
   const high = metrics.high + metrics.veryHigh;
   const t = metrics.targets;
   const lines: string[] = [];
+  const anonymise = options.anonymise === true;
+  const patientLabel = anonymise ? 'Patient' : patient.trim() || 'Patient not specified';
+  const fileLabel = anonymise ? 'source file hidden' : dataset.meta.fileName;
 
   lines.push('SOKERIREPORT · GLYCEMIC CONTROL SUMMARY');
   lines.push(
-    `${patient.trim() || 'Patient not specified'} · ${dateLong(metrics.start)} – ${dateLong(metrics.end)} · ${days} ${days === 1 ? 'day' : 'days'} · ${fmtInt(metrics.count)} readings`,
+    `${patientLabel} · ${dateLong(metrics.start)} – ${dateLong(metrics.end)} · ${days} ${days === 1 ? 'day' : 'days'} · ${fmtInt(metrics.count)} readings`,
   );
   lines.push(
-    `${dataset.meta.source} · ${dataset.meta.fileName} · targets ${t.label} (${rangeLabel(t.low, t.high, unit)})`,
+    `${dataset.meta.source} · ${fileLabel} · targets ${t.label} (${rangeLabel(t.low, t.high, unit)})`,
   );
   lines.push('');
 
@@ -68,7 +72,7 @@ export function buildSummary(
   for (const insight of metrics.insights.slice(0, 4)) {
     lines.push(`• ${insight.title}`);
   }
-  if (note.trim()) {
+  if (!anonymise && note.trim()) {
     lines.push('');
     lines.push(`Clinician note: ${note.trim()}`);
   }

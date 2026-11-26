@@ -1,0 +1,10 @@
+[
+  {
+    "file": "../embedded-clock-glyph.pdf",
+    "pages": 1,
+    "readings": 48,
+    "unit": "mmol/L",
+    "source": "LibreView PDF",
+    "warningsInclude": "Daily Log graph"
+  }
+]

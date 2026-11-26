@@ -36,17 +36,16 @@ describe('import diagnostics', () => {
     expect(removed).toContain('glucose value could not be read');
   });
 
-  test('reports a summary PDF without inventing table rows', () => {
+  test('returns a summary PDF without inventing table rows', () => {
     const outcome = parsePdfLines(
       page('Average glucose 133 mg/dL', 'Time in range 78%'),
       'summary.pdf',
     );
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.diagnostics?.rows).toBe(0);
-    expect(outcome.diagnostics?.notes.join(' ')).toContain('No readings table header');
-    expect(outcome.diagnostics?.notes.join(' ')).toContain('2 text lines scanned');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok || !('summary' in outcome)) return;
+    expect(outcome.summary.tir).toBe(78);
+    expect(outcome.summary.mean).toBe(133);
   });
 
   test('reports an image-only PDF', () => {
