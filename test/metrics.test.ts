@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeMetrics } from '../src/lib/metrics';
+import { computeMetrics, type Metrics } from '../src/lib/metrics';
 import type { Dataset, Reading } from '../src/lib/types';
 
 const values = [50, 65, 100, 200, 300, 50, 65, 100];
@@ -56,6 +56,79 @@ describe('target profiles and GRI', () => {
     expect(metrics.titrr).toBe(50);
     expect(metrics.low).toBe(0);
     expect(metrics.gri).toBeGreaterThan(0);
+  });
+});
+
+describe('profile goals', () => {
+  test('exposes the guideline goals for each profile', () => {
+    const older = computeMetrics(dataset, { profile: 'older' }).targets;
+    expect(older).toMatchObject({ tirGoal: 50, lowGoal: 1, tarGoal: 50, veryHighGoal: 10 });
+
+    const pregnancy = computeMetrics(dataset, { profile: 'pregnancy' }).targets;
+    expect(pregnancy).toMatchObject({ tirGoal: 70, lowGoal: 4, tarGoal: 25 });
+    expect(pregnancy.veryHighGoal).toBeUndefined();
+
+    const standard = computeMetrics(dataset, { profile: 'standard' }).targets;
+    expect(standard).toMatchObject({ tirGoal: 70, tarGoal: 25, veryHighGoal: 5 });
+  });
+
+  test('judges TIR against the profile goal, not a fixed 70%', () => {
+    // 60% in range: above target for older adults (>50%), below it for standard (>70%).
+    const readings = [
+      ...Array.from({ length: 6 }, (_, index) => at(8, index * 5, 100)),
+      ...Array.from({ length: 2 }, (_, index) => at(12, index * 5, 200)),
+      ...Array.from({ length: 2 }, (_, index) => at(16, index * 5, 60)),
+    ];
+
+    const tir = (metrics: Metrics) =>
+      metrics.insights.find((insight) => insight.title.startsWith('Time in range'));
+
+    const older = tir(computeMetrics(makeDataset(readings), { profile: 'older' }));
+    expect(older?.tone).toBe('good');
+    expect(older?.body).toContain('50% target');
+
+    const standard = tir(computeMetrics(makeDataset(readings), { profile: 'standard' }));
+    expect(standard?.tone).toBe('warn');
+    expect(standard?.body).toContain('70% target');
+  });
+
+  test('judges time above range against the profile goal', () => {
+    const readings = [
+      ...Array.from({ length: 9 }, (_, index) => at(8, index * 5, 100)),
+      ...Array.from({ length: 11 }, (_, index) => at(12, index * 5, 200)),
+    ];
+    const older = computeMetrics(makeDataset(readings), { profile: 'older' });
+
+    expect(older.high + older.veryHigh).toBeCloseTo(55, 5);
+    const high = older.insights.find((insight) => insight.title.startsWith('Time above range'));
+    expect(high?.tone).toBe('warn');
+    expect(high?.body).toContain('50% target');
+  });
+});
+
+describe('GRI bands', () => {
+  test('stays on fixed 54/70/180/250 bands across profiles', () => {
+    // Two GRI lows (65, 68) and one reading above the pregnancy high (150).
+    const readings = [
+      at(0, 0, 65),
+      at(0, 5, 68),
+      at(0, 10, 100),
+      at(0, 15, 120),
+      at(0, 20, 130),
+      at(0, 25, 150),
+    ];
+    const mixed = makeDataset(readings);
+    const standard = computeMetrics(mixed, { profile: 'standard' });
+    const pregnancy = computeMetrics(mixed, { profile: 'pregnancy' });
+
+    // 2 of 6 readings in the fixed 54–70 GRI low band → 2.4 × 33.3%.
+    expect(standard.gri).toBeCloseTo(80, 5);
+    expect(pregnancy.gri).toBeCloseTo(80, 5);
+    expect(pregnancy.gri).toBeCloseTo(standard.gri, 10);
+
+    // Display bands still follow the profile: 70–180 vs pregnancy 63–140.
+    expect(standard.target).toBeCloseTo((4 / 6) * 100, 5);
+    expect(pregnancy.target).toBeCloseTo((5 / 6) * 100, 5);
   });
 });
 
