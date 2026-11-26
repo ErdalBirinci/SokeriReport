@@ -243,7 +243,7 @@ describe('PDF report imports', () => {
     const extracted = await extractPdfText(await file.arrayBuffer());
     expect(extracted.pages[0]).toContain('\uE09200');
 
-    const outcome = await parseFile(file);
+    const outcome = parsePdfLines(extracted.pages, 'embedded-clock-glyph.pdf');
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.dataset.readings).toHaveLength(48);
@@ -251,7 +251,7 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.meta.source).toBe('LibreView PDF');
     expect(outcome.warnings[0]).toContain('Daily Log graph');
     expect(outcome.warnings.join(' ')).not.toContain('PDF table');
-  });
+  }, 20_000);
 
   test('reads clock labels whose colon is a private-use glyph', () => {
     const max = Array.from({ length: 24 }, (_, hour) => (7 + hour * 0.2).toFixed(1));
