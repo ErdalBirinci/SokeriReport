@@ -598,7 +598,12 @@ function parseNightscout(text: string, fileName: string): ParseOutcome {
   );
 }
 
-function parseGenericCsv(text: string, fileName: string, override?: DateOrder): ParseOutcome {
+function parseGenericCsv(
+  text: string,
+  fileName: string,
+  override?: DateOrder,
+  source = 'Generic CSV',
+): ParseOutcome {
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: 'greedy',
@@ -611,7 +616,7 @@ function parseGenericCsv(text: string, fileName: string, override?: DateOrder): 
 
   if (!timeCol || !valueCol) {
     return fail(
-      `Columns not recognized. A time and a glucose column are required; found: ${listHeaders(fields)}. Supported formats: LibreView CSV, Dexcom Clarity CSV, Nightscout JSON or a CSV with time + glucose columns.`,
+      `Columns not recognized. A time and a glucose column are required; found: ${listHeaders(fields)}. Supported formats: LibreView CSV, Dexcom Clarity CSV, Nightscout JSON, a CSV with time + glucose columns, or a PDF containing a glucose readings table.`,
     );
   }
 
@@ -640,7 +645,7 @@ function parseGenericCsv(text: string, fileName: string, override?: DateOrder): 
     [],
     [],
     {
-      source: 'Generic CSV',
+      source,
       fileName,
       unit: unitHint ?? 'mg/dL',
       date: dateInfo.meta,
@@ -649,6 +654,221 @@ function parseGenericCsv(text: string, fileName: string, override?: DateOrder): 
     warnings,
     unitHint,
   );
+}
+
+const PDF_READINGS_TITLE = /glucose readings|sensor glucose readings|glucose values|readings report/i;
+const PDF_SUMMARY =
+  /average glucose|mean glucose|time in range|glucose management indicator|ambulatory glucose profile|\bAGP\b/i;
+
+const MONTHS: Record<string, string> = {
+  jan: '01',
+  feb: '02',
+  mar: '03',
+  apr: '04',
+  may: '05',
+  jun: '06',
+  jul: '07',
+  aug: '08',
+  sep: '09',
+  oct: '10',
+  nov: '11',
+  dec: '12',
+};
+
+function pdfUnit(text: string): 'mg/dL' | 'mmol/L' | undefined {
+  // Read the unit from the glucose header, not from any target/legend line:
+  // LibreView reports often mention mmol/L in a footnote while the table is mg/dL.
+  for (const line of text.split(/\r?\n/)) {
+    if (!TEXT.glucose.test(line)) continue;
+    if (/mmol\s*\/\s*l/i.test(line)) return 'mmol/L';
+    if (/mg\s*\/\s*dl/i.test(line)) return 'mg/dL';
+  }
+  return undefined;
+}
+
+function pdfSummaryFacts(text: string): string {
+  const facts: string[] = [];
+  const average = text.match(
+    /average\s+glucose[^0-9]{0,20}(\d+(?:[.,]\d+)?)\s*(mg\s*\/\s*dl|mmol\s*\/\s*l)?/i,
+  );
+  if (average) facts.push(`average glucose ${average[1]} ${average[2] ?? ''}`.trim());
+
+  const tir = text.match(/time\s+in\s+range[^0-9]{0,20}(\d+(?:[.,]\d+)?)\s*%/i);
+  if (tir) facts.push(`TIR ${tir[1]}%`);
+
+  const cv = text.match(
+    /(?:coefficient\s+of\s+variation|\bCV\b)[^0-9]{0,20}(\d+(?:[.,]\d+)?)\s*%/i,
+  );
+  if (cv) facts.push(`CV ${cv[1]}%`);
+
+  const gmi = text.match(
+    /(?:glucose\s+management\s+indicator|\bGMI\b)[^0-9]{0,20}(\d+(?:[.,]\d+)?)\s*%/i,
+  );
+  if (gmi) facts.push(`GMI ${gmi[1]}%`);
+
+  return facts.length ? ` The PDF does report ${facts.join(', ')}, but those are summary values.` : '';
+}
+
+function pdfSummaryMessage(text: string): string {
+  if (PDF_SUMMARY.test(text)) {
+    return `This PDF is a summary report: it contains averages, TIR and charts, but not the individual glucose readings an analysis needs.${pdfSummaryFacts(text)} Export the raw data and upload that instead: LibreView → Download CSV; Dexcom Clarity → Export → CSV; Nightscout → JSON.`;
+  }
+  return 'No glucose readings table was found in this PDF. PDFs with a date/time + glucose table are supported; summary reports need the raw export instead (LibreView → Download CSV, Dexcom Clarity → Export → CSV, Nightscout → JSON).';
+}
+
+function hasPdfReadingsTable(lines: string[], text: string): boolean {
+  if (PDF_READINGS_TITLE.test(text)) return true;
+  return lines.some((line) => {
+    if (/average|mean|median|statistics|distribution|percentile|time in range|target range/i.test(line)) {
+      return false;
+    }
+    return TEXT.glucose.test(line) && /(date|time|timestamp|zeit|tarih|zaman|datum)/i.test(line);
+  });
+}
+
+/** A line that only carries a date resets the context for daily-log tables. */
+function pdfDateHeader(line: string, fallbackYear: string | null): string | null {
+  const stripped = line.replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.]?\s+/i, '');
+
+  const numeric = stripped.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (numeric) return `${numeric[1]}.${numeric[2]}.${numeric[3]}`;
+
+  const iso = stripped.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const named = stripped.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/);
+  if (named) {
+    const month = MONTHS[named[2].slice(0, 3).toLowerCase()];
+    if (month) return `${named[1]}.${month}.${named[3]}`;
+  }
+
+  const american = stripped.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (american) {
+    const month = MONTHS[american[1].slice(0, 3).toLowerCase()];
+    if (month) return `${american[2]}.${month}.${american[3]}`;
+  }
+
+  const short = stripped.match(/^(\d{1,2})[./-](\d{1,2})$/);
+  if (short && fallbackYear) return `${short[1]}.${short[2]}.${fallbackYear}`;
+
+  return null;
+}
+
+function pdfNumeric(raw: string): number | null {
+  return toNumber(raw.replace(/^[<>]/, ''));
+}
+
+/**
+ * Turn a PDF reading table back into the same time/value pairs the CSV path
+ * understands. Summary reports deliberately fail here: their averages and
+ * charts cannot be expanded into individual readings without inventing data.
+ */
+export function parsePdfLines(
+  pages: string[],
+  fileName: string,
+  override?: DateOrder,
+): ParseOutcome {
+  const text = pages.join('\n').trim();
+  if (!text) {
+    return fail(
+      'This PDF contains no selectable text, so no readings could be extracted. It may be scanned or image-only; upload the original CSV or JSON export instead.',
+    );
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? null;
+
+  if (!hasPdfReadingsTable(lines, text)) {
+    return fail(pdfSummaryMessage(text));
+  }
+
+  const rows: Array<{ time: string; value: number }> = [];
+  let currentDate: string | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^[•·]\s*/, '');
+    const headerDate = pdfDateHeader(line, fallbackYear);
+    if (headerDate) {
+      currentDate = headerDate;
+      continue;
+    }
+
+    const full = line.match(
+      /^(?:\d{1,4}\s+)?(\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})[ ,T]+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
+    );
+    if (full) {
+      currentDate = full[1];
+      const value = pdfNumeric(full[3]);
+      if (value !== null) rows.push({ time: `${full[1]} ${full[2]}`, value });
+      continue;
+    }
+
+    const timed = line.match(
+      /^(?:\d{1,4}\s+)?(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
+    );
+    if (timed && currentDate) {
+      const value = pdfNumeric(timed[2]);
+      if (value !== null) rows.push({ time: `${currentDate} ${timed[1]}`, value });
+    }
+  }
+
+  if (!rows.length) return fail(pdfSummaryMessage(text));
+  if (rows.length < 8) {
+    if (PDF_SUMMARY.test(text)) return fail(pdfSummaryMessage(text));
+    return fail(
+      `Only ${rows.length} glucose readings could be read from the PDF; at least 8 are required. Use the original CSV or JSON export for a complete report.`,
+    );
+  }
+
+  const unit = pdfUnit(text);
+  const header = unit ? `time,glucose (${unit})` : 'time,glucose';
+  const csv = `${header}\n${rows.map((row) => `${row.time},${row.value}`).join('\n')}`;
+  const source = /libreview|freestyle libre/i.test(text)
+    ? 'LibreView PDF'
+    : /dexcom|clarity/i.test(text)
+      ? 'Dexcom Clarity PDF'
+      : /nightscout/i.test(text)
+        ? 'Nightscout PDF'
+        : 'PDF report';
+
+  const outcome = parseGenericCsv(csv, fileName, override, source);
+  if (outcome.ok) {
+    outcome.warnings.unshift(
+      `Read ${rows.length} glucose readings from the PDF table. Check the report against the original PDF.`,
+    );
+  }
+  return outcome;
+}
+
+function looksLikePdf(bytes: Uint8Array): boolean {
+  const limit = Math.min(bytes.length - 5, 1023);
+  for (let index = 0; index <= limit; index += 1) {
+    if (
+      bytes[index] === 0x25 &&
+      bytes[index + 1] === 0x50 &&
+      bytes[index + 2] === 0x44 &&
+      bytes[index + 3] === 0x46 &&
+      bytes[index + 4] === 0x2d
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pdfErrorMessage(error: unknown): string {
+  const name = (error as { name?: string } | null)?.name ?? '';
+  const message = error instanceof Error ? error.message : '';
+  if (name === 'PasswordException' || /password/i.test(message)) {
+    return 'This PDF is password-protected. Remove the password, or upload the original CSV or JSON export.';
+  }
+  if (name === 'InvalidPDFException') {
+    return 'This PDF could not be read because the file appears to be damaged. Upload the original CSV or JSON export.';
+  }
+  return `Could not read the PDF: ${message || 'unknown error'}`;
 }
 
 function parseText(text: string, fileName: string, override?: DateOrder): ParseOutcome {
@@ -680,6 +900,23 @@ export interface ParseOptions {
 export async function parseFile(file: File, options: ParseOptions = {}): Promise<ParseOutcome> {
   try {
     const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const pdf = looksLikePdf(bytes);
+    if (pdf || file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+      if (!pdf) {
+        return fail(
+          'This file has a .pdf name but is not a valid PDF. Upload the original CSV or JSON export instead.',
+        );
+      }
+      try {
+        const { extractPdfText } = await import('./pdf');
+        const extracted = await extractPdfText(buffer);
+        return parsePdfLines(extracted.pages, file.name, options.dateOrder);
+      } catch (error) {
+        return fail(pdfErrorMessage(error));
+      }
+    }
+
     const { text, encoding } = decodeBuffer(buffer);
     const outcome = parseText(text, file.name, options.dateOrder);
     if (outcome.ok && !encoding.startsWith('UTF-8')) {

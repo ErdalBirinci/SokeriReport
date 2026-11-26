@@ -446,7 +446,7 @@ export default function App() {
       <input
         ref={compareInput}
         type="file"
-        accept=".csv,.tsv,.txt,.json"
+        accept=".csv,.tsv,.txt,.json,.pdf,application/pdf"
         hidden
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);

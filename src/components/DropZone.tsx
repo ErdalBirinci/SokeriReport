@@ -64,7 +64,7 @@ export default function DropZone({ onFiles, busy }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.json,.txt,text/csv,application/json"
+        accept=".csv,.json,.txt,.pdf,text/csv,application/json,application/pdf"
         hidden
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
@@ -99,7 +99,7 @@ export default function DropZone({ onFiles, busy }: Props) {
         {busy ? 'Analyzing…' : dragging ? 'Drop it — analysis happens in your browser' : 'Drag your file here'}
       </div>
       <div className="drop-hint">
-        or <span className="drop-cta">choose a file from your device</span> · CSV, JSON · exports work as-is
+        or <span className="drop-cta">choose a file from your device</span> · CSV, JSON, PDF · exports work as-is
       </div>
 
       <div className="drop-formats" aria-hidden="true">
@@ -111,6 +111,9 @@ export default function DropZone({ onFiles, busy }: Props) {
         </span>
         <span className="format">
           <b>Nightscout</b> · JSON
+        </span>
+        <span className="format">
+          <b>PDF</b> · readings table
         </span>
       </div>
     </div>
