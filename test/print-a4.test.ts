@@ -421,6 +421,15 @@ async function runA4Test(chromePath: string): Promise<void> {
             if (scenario.warning) expect(text).toContain('Different window lengths.');
             else expect(text).not.toContain('Different window lengths.');
           }
+
+          // The TIR/TAR goal policy is stated once, in the report footer. It
+          // must not reappear in the KPI card or the clinical summary.
+          const normalized = text.replace(/\s+/g, ' ');
+          const goalMentions = normalized.match(/TIR >\d+%/g) ?? [];
+          expect(goalMentions, `${scenario.slug}-${period}`).toHaveLength(1);
+          expect(normalized.indexOf(goalMentions[0])).toBeGreaterThan(
+            normalized.lastIndexOf('ASSESSMENT'),
+          );
         }
       }
     }
