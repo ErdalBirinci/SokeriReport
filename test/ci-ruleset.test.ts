@@ -50,3 +50,23 @@ test('keeps the required A4 check name aligned with the ruleset context', () => 
   expect(workflowJobName).toBe('A4 print regression required');
   expect(context).toBe(workflowJobName);
 });
+
+function triggerBlock(): string {
+  const lines = readLines('.github/workflows/a4-print.yml');
+  const start = lines.indexOf('on:');
+  if (start === -1) throw new Error('A4 workflow has no on: block');
+  const end = lines.findIndex((line, index) => index > start && /^[A-Za-z]/.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).join('\n');
+}
+
+test('runs on pull requests and only on main pushes, never twice for a PR', () => {
+  const lines = triggerBlock().split('\n');
+  const pushIndex = lines.indexOf('  push:');
+
+  expect(pushIndex).toBeGreaterThanOrEqual(0);
+  // The push trigger must be scoped to main; a bare `push:` would run the
+  // matrix a second time for every PR branch.
+  expect(lines[pushIndex + 1]?.trim()).toBe('branches: [main]');
+  expect(lines[pushIndex + 2]).toBe('  pull_request:');
+  expect(lines).toContain('  pull_request:');
+});
