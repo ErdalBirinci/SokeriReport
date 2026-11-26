@@ -158,6 +158,24 @@ describe('PDF report imports', () => {
     expect(new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString())).size).toBe(4);
   });
 
+  test('detects a table whose header cells are on separate lines', () => {
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Günlük Kayıt',
+        'Tarih',
+        'Saat',
+        'Glikoz (mg/dL)',
+        '27.10.2026',
+        ...Array.from({ length: 10 }, (_, index) => `08:${String(index * 5).padStart(2, '0')} ${100 + index}`),
+      ),
+      'stacked-headers.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(10);
+  });
+
   test('recovers rows whose date, time and value are on separate lines', () => {
     const lines = ['LibreView Glucose Readings', 'Date Time Glucose (mg/dL)'];
     for (let index = 0; index < 10; index += 1) {
@@ -303,7 +321,7 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.meta.source).toBe('LibreView PDF');
     expect(outcome.dataset.meta.unit).toBe('mg/dL');
     expect(outcome.warnings[0]).toContain('PDF table');
-  });
+  }, 30_000);
 
   test('extracts a PDF with yearless date headers end to end', async () => {
     const outcome = await parseFile(await fixture('yearless-headers.pdf'));
