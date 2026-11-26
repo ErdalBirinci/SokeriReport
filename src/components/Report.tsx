@@ -349,22 +349,24 @@ export default function Report({
             <p>Readings below {fmtGlucose(targets.low, unit)} {unit}</p>
           </div>
           <div className="card">
-            <HypoHistogram
-              counts={metrics.hypoByHour}
-              windowStart={metrics.hypoWindow.start}
-              threshold={targets.low}
-              unit={unit}
-            />
-            {metrics.hypoWindow.meaningful && (
-              <div className="callout">
-                Lows cluster at{' '}
-                <b>
-                  {clockLabel(metrics.hypoWindow.start)}–{clockLabel(metrics.hypoWindow.end)}
-                </b>{' '}
-                · {fmt1(metrics.hypoWindow.share)}% of {metrics.hypoReadings} lows · night share{' '}
-                {fmt1(metrics.nightHypoShare)}%
-              </div>
-            )}
+            <div className={printOptions.showHypoSafety ? 'print-hide' : undefined}>
+              <HypoHistogram
+                counts={metrics.hypoByHour}
+                windowStart={metrics.hypoWindow.start}
+                threshold={targets.low}
+                unit={unit}
+              />
+              {metrics.hypoWindow.meaningful && (
+                <div className="callout">
+                  Lows cluster at{' '}
+                  <b>
+                    {clockLabel(metrics.hypoWindow.start)}–{clockLabel(metrics.hypoWindow.end)}
+                  </b>{' '}
+                  · {fmt1(metrics.hypoWindow.share)}% of {metrics.hypoReadings} lows · night share{' '}
+                  {fmt1(metrics.nightHypoShare)}%
+                </div>
+              )}
+            </div>
             <div className={printOptions.showHypoSafety ? undefined : 'print-hide'}>
               <HypoSafetyPanel metrics={metrics} unit={unit} />
             </div>
@@ -425,6 +427,8 @@ export default function Report({
             className="summary-edit no-print"
             value={summary}
             onChange={(event) => onSummaryChange(event.target.value)}
+            readOnly={printOptions.anonymise}
+            aria-readonly={printOptions.anonymise}
             spellCheck={false}
             aria-label="Clinical summary text"
           />
@@ -433,9 +437,11 @@ export default function Report({
             <button className="btn btn-primary btn-sm" type="button" onClick={copySummary}>
               {copied ? 'Copied ✓' : 'Copy summary'}
             </button>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={onSummaryReset}>
-              Reset to automatic summary
-            </button>
+            {!printOptions.anonymise && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={onSummaryReset}>
+                Reset to automatic summary
+              </button>
+            )}
             <span className="summary-meta">
               {printOptions.anonymise
                 ? 'Sharing mode: identifiers and the clinical note are left out of the printed summary'

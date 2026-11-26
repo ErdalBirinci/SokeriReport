@@ -37,6 +37,15 @@ import type { Dataset, DateOrder, ParseDiagnostics, SummaryImport } from './lib/
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
+/** Keep source filenames out of the printed warnings in sharing mode. */
+const redactFileNames = (text: string, files: string[]): string => {
+  let redacted = text;
+  for (const file of files) {
+    if (file) redacted = redacted.split(file).join('source file');
+  }
+  return redacted.replace(/\b[\w.-]+\.(?:csv|tsv|txt|json|pdf)\b/gi, 'source file');
+};
+
 export default function App() {
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [period, setPeriod] = useState<ReportPeriod>('14d');
@@ -82,16 +91,25 @@ export default function App() {
     () => (effectiveDataset ? availablePeriods(effectiveDataset) : []),
     [effectiveDataset],
   );
+  useEffect(() => {
+    if (!effectiveDataset || isPeriodAvailable(effectiveDataset, period)) return;
+    setPeriod(defaultPeriod(effectiveDataset));
+  }, [effectiveDataset, period]);
   const excludedCount = useMemo(
     () => (dataset && effectiveDataset ? dataset.readings.length - effectiveDataset.readings.length : 0),
     [dataset, effectiveDataset],
   );
   const displayWarnings = useMemo(
-    () =>
-      excludedCount > 0
-        ? [...warnings, `${excludedCount} readings excluded manually in the import receipt.`]
-        : warnings,
-    [excludedCount, warnings],
+    () => {
+      const next =
+        excludedCount > 0
+          ? [...warnings, `${excludedCount} readings excluded manually in the import receipt.`]
+          : warnings;
+      if (!printOptions.anonymise) return next;
+      const files = dataset ? (dataset.meta.files ?? [dataset.meta.fileName]) : [];
+      return next.map((warning) => redactFileNames(warning, files));
+    },
+    [dataset, excludedCount, warnings, printOptions.anonymise],
   );
   const metrics = useMemo(
     () => (reportDataset ? computeMetrics(reportDataset, { profile, unit }) : null),
@@ -230,7 +248,9 @@ export default function App() {
       setPrintCheck(null);
       setSummaryOverride(null);
 
-      let merged = effectiveDataset ?? dataset;
+      // Merge into the full dataset so manual exclusions stay reversible; the
+      // current exclusion set is preserved when the new readings arrive.
+      let merged = dataset;
       let added = 0;
       let duplicates = 0;
       const notes: string[] = [];
@@ -258,7 +278,7 @@ export default function App() {
 
       setDataset(merged);
       setSummaryImport(null);
-      setExcluded(new Set());
+      setExcluded(excluded);
       setDiagnostics(null);
       setSourceFile(null);
       setWarnings([
@@ -272,7 +292,7 @@ export default function App() {
       setBusy(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-    [dataset, effectiveDataset, warnings],
+    [dataset, excluded, warnings],
   );
 
   const handlePrint = useCallback(() => {

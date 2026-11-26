@@ -17,6 +17,7 @@ type PrintToggles = {
   quality: boolean;
   comparison: boolean;
   questions: boolean;
+  hypo: boolean;
 };
 
 type ProfileId = 'standard' | 'older';
@@ -36,11 +37,11 @@ interface Scenario {
   profile?: ProfileId;
 }
 
-const allSections: PrintToggles = { quality: true, comparison: true, questions: true };
-const onlyQuality: PrintToggles = { quality: true, comparison: false, questions: false };
-const onlyComparison: PrintToggles = { quality: false, comparison: true, questions: false };
-const onlyQuestions: PrintToggles = { quality: false, comparison: false, questions: true };
-const noSections: PrintToggles = { quality: false, comparison: false, questions: false };
+const allSections: PrintToggles = { quality: true, comparison: true, questions: true, hypo: true };
+const onlyQuality: PrintToggles = { quality: true, comparison: false, questions: false, hypo: false };
+const onlyComparison: PrintToggles = { quality: false, comparison: true, questions: false, hypo: false };
+const onlyQuestions: PrintToggles = { quality: false, comparison: false, questions: true, hypo: false };
+const noSections: PrintToggles = { quality: false, comparison: false, questions: false, hypo: false };
 
 const scenarios: Scenario[] = [
   { slug: 'warning-all', previousDays: 21, warning: true, options: allSections, periods: ['1m', '3m'] },
@@ -55,8 +56,8 @@ const scenarios: Scenario[] = [
 const artifactDir = join(process.cwd(), 'test-results', 'a4');
 const pdftotext = Bun.which('pdftotext');
 
-function enabledSections(options: PrintToggles): number {
-  return Object.values(options).filter(Boolean).length;
+function enabledOptionalSections(options: PrintToggles): number {
+  return [options.quality, options.comparison, options.questions].filter(Boolean).length;
 }
 
 function findChrome(): string | null {
@@ -269,6 +270,7 @@ async function setPrintOptions(cdp: Cdp, options: PrintToggles): Promise<void> {
       'Data quality': 'quality',
       'Previous report': 'comparison',
       'Questions': 'questions',
+      'Hypoglycemia safety details': 'hypo',
     };
     for (const toggle of document.querySelectorAll('.print-options-modal .option-toggle')) {
       const label = Object.keys(labelToKey).find((candidate) => toggle.textContent?.includes(candidate));
@@ -283,7 +285,7 @@ async function setPrintOptions(cdp: Cdp, options: PrintToggles): Promise<void> {
   })()`);
   await waitForPage(
     cdp,
-    `document.querySelectorAll('.print-optional:not(.print-hide)').length === ${enabledSections(options)}`,
+    `document.querySelectorAll('.print-optional:not(.print-hide)').length === ${enabledOptionalSections(options)}`,
     5_000,
   );
 }
@@ -412,7 +414,7 @@ async function runA4Test(chromePath: string): Promise<void> {
         expect(state.period).toBe(period);
         expect(state.profile).toBe(scenario.profile ?? 'standard');
         expect(state.reportSub).toContain(`${expectedDays} days`);
-        expect(state.optionalSections).toBe(enabledSections(scenario.options));
+        expect(state.optionalSections).toBe(enabledOptionalSections(scenario.options));
         expect(Boolean(state.warningText)).toBe(scenario.warning);
         if (scenario.warning) {
           expect(state.warningText).toContain('Different window lengths.');
@@ -448,6 +450,8 @@ async function runA4Test(chromePath: string): Promise<void> {
           if (scenario.options.quality) expect(text).toContain('Data quality');
           if (scenario.options.comparison) expect(text).toContain('Compared with previous export');
           if (scenario.options.questions) expect(text).toContain('Night-to-morning');
+          if (scenario.options.hypo) expect(text.toLowerCase()).toContain('longest low episodes');
+          else expect(text.toLowerCase()).not.toContain('longest low episodes');
           if (scenario.options.comparison) {
             if (scenario.warning) expect(text).toContain('Different window lengths.');
             else expect(text).not.toContain('Different window lengths.');

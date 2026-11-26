@@ -53,11 +53,11 @@ export default function ImportReceipt({
   };
 
   const files = dataset.meta.files ?? [dataset.meta.fileName];
-  const kept = readings.length;
   const excludedCount = readings.reduce(
     (count, reading) => count + (excluded.has(readingKey(reading)) ? 1 : 0),
     0,
   );
+  const kept = readings.length - excludedCount;
   const date = dataset.meta.date;
   const assumptions = [
     `${dataset.meta.source} · ${dataset.meta.unit} source`,
