@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ArchiveDialog from './components/ArchiveDialog';
 import Brand from './components/Brand';
 import type { Comparison } from './components/ComparisonPanel';
+import ImportDiagnostics from './components/ImportDiagnostics';
 import Landing from './components/Landing';
 import PrintOptionsDialog from './components/PrintOptionsDialog';
 import Report from './components/Report';
@@ -27,7 +28,7 @@ import {
 import { prepareReportForPrint, resetPrintFit, type PrintPreflight } from './lib/printFit';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
 import { buildSummary } from './lib/summary';
-import type { Dataset, DateOrder } from './lib/types';
+import type { Dataset, DateOrder, ParseDiagnostics } from './lib/types';
 
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
@@ -44,8 +45,7 @@ export default function App() {
   const [note, setNote] = useState('');
   const [summaryOverride, setSummaryOverride] = useState<string | null>(null);
   const [printCheck, setPrintCheck] = useState<PrintPreflight | null>(null);
-  const [sparseFile, setSparseFile] = useState<File | null>(null);
-  const [allowSparse, setAllowSparse] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<ParseDiagnostics | null>(null);
 
   const [profile, setProfile] = useState<TargetProfileId>('standard');
   const [unit, setUnit] = useState<GlucoseUnit>('mg/dL');
@@ -100,8 +100,7 @@ export default function App() {
     setBusy(true);
     setReordering(false);
     setError(null);
-    setSparseFile(null);
-    setAllowSparse(Boolean(options.allowSparse));
+    setDiagnostics(null);
     const outcome = await parseFileAsync(file, options);
     // A newer drop or a reset has taken over; do not overwrite its state.
     if (request !== parseToken.current) return;
@@ -118,7 +117,7 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setError(outcome.error);
-      if (!options.allowSparse && /at least 8|fewer than 8/.test(outcome.error)) setSparseFile(file);
+      setDiagnostics(outcome.diagnostics ?? null);
     }
     setBusy(false);
   }, []);
@@ -129,7 +128,7 @@ export default function App() {
     const request = compareToken.current + 1;
     compareToken.current = request;
     setError(null);
-    setSparseFile(null);
+    setDiagnostics(null);
     setBusy(true);
     const outcome = await parseFileAsync(file);
     if (request !== compareToken.current) return;
@@ -137,6 +136,7 @@ export default function App() {
       setPrevious({ fileName: file.name, dataset: outcome.dataset });
     } else {
       setError(`Could not read the comparison file. ${outcome.error}`);
+      setDiagnostics(outcome.diagnostics ?? null);
     }
     setBusy(false);
   }, []);
@@ -252,8 +252,7 @@ export default function App() {
       setSourceFile(null);
       setPrevious(null);
       setPrintCheck(null);
-      setSparseFile(null);
-      setAllowSparse(false);
+      setDiagnostics(null);
       const archiveNotes = ['Opened from the encrypted local archive.'];
       if (payload.dataset.meta.date.uncertain) {
         // Re-parsing needs the original export, which the archive does not hold.
@@ -294,7 +293,8 @@ export default function App() {
       parseToken.current = request;
       setReordering(true);
       setError(null);
-      const outcome = await parseFileAsync(sourceFile, { dateOrder: order, allowSparse });
+      setDiagnostics(null);
+      const outcome = await parseFileAsync(sourceFile, { dateOrder: order });
       if (request !== parseToken.current) return;
       if (outcome.ok) {
         setDataset(outcome.dataset);
@@ -307,10 +307,11 @@ export default function App() {
         setSummaryOverride(null);
       } else {
         setError(outcome.error);
+        setDiagnostics(outcome.diagnostics ?? null);
       }
       setReordering(false);
     },
-    [sourceFile, allowSparse],
+    [sourceFile],
   );
 
   const changeProfile = useCallback((id: TargetProfileId) => {
@@ -340,8 +341,7 @@ export default function App() {
     setSourceFile(null);
     setPrevious(null);
     setPrintCheck(null);
-    setSparseFile(null);
-    setAllowSparse(false);
+    setDiagnostics(null);
     setDataset(demo);
     setPeriod(defaultPeriod(demo));
     setWarnings([
@@ -360,8 +360,7 @@ export default function App() {
     setSourceFile(null);
     setPrevious(null);
     setPrintCheck(null);
-    setSparseFile(null);
-    setAllowSparse(false);
+    setDiagnostics(null);
     setDataset(null);
     setPeriod('14d');
     setWarnings([]);
@@ -535,21 +534,7 @@ export default function App() {
           </span>
           <div>
             <strong>Could not analyze the file.</strong> {error}
-            {sparseFile && (
-              <div className="error-action">
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => {
-                    const file = sparseFile;
-                    setSparseFile(null);
-                    void handleFiles([file], { allowSparse: true });
-                  }}
-                >
-                  Analyze this small sample
-                </button>
-              </div>
-            )}
+            {diagnostics && <ImportDiagnostics diagnostics={diagnostics} />}
           </div>
         </div>
       )}

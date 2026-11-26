@@ -5,6 +5,7 @@ import type {
   DateMeta,
   DateOrder,
   InsulinDose,
+  ParseDiagnostics,
   ParseOutcome,
   Reading,
   ReadingKind,
@@ -36,7 +37,18 @@ const TEXT = {
   genericTime: /(time|date|timestamp|zaman|tarih|datum|fecha|horodatage|uhrzeit)/i,
 } as const;
 
-const fail = (error: string): ParseOutcome => ({ ok: false, error });
+const fail = (error: string, diagnostics?: ParseDiagnostics): ParseOutcome =>
+  diagnostics ? { ok: false, error, diagnostics } : { ok: false, error };
+
+const makeDiagnostics = (partial: Partial<ParseDiagnostics> = {}): ParseDiagnostics => ({
+  rows: 0,
+  dates: 0,
+  values: 0,
+  kept: 0,
+  removed: [],
+  notes: [],
+  ...partial,
+});
 
 /** Decode an export that may be UTF-8, UTF-16 (with BOM) or a Windows code page. */
 function decodeBuffer(buffer: ArrayBuffer): { text: string; encoding: string } {
@@ -244,13 +256,33 @@ function finalize(
   warnings: string[],
   /** Unit stated by the column headers; beats guessing from the value spread. */
   unitHint?: 'mg/dL' | 'mmol/L',
-  /** The user explicitly accepted a sample smaller than eight readings. */
-  allowSparse = false,
+  trace: Partial<ParseDiagnostics> = {},
 ): ParseOutcome {
-  const valid = readings.filter((r) => Number.isFinite(r.t) && r.v > 0 && r.v < 800);
+  const outOfRange = readings.filter(
+    (r) => Number.isFinite(r.v) && (r.v <= 0 || r.v >= 800),
+  ).length;
+  const invalid = readings.filter(
+    (r) => !Number.isFinite(r.t) || !Number.isFinite(r.v),
+  ).length;
+  const valid = readings.filter(
+    (r) => Number.isFinite(r.t) && r.v > 0 && r.v < 800,
+  );
   if (!valid.length) {
+    const removed = [...(trace.removed ?? [])];
+    if (invalid) removed.push({ label: 'skipped: the date or value was unreadable', count: invalid });
+    if (outOfRange) {
+      removed.push({ label: 'skipped: the value was outside 1–799 mg/dL', count: outOfRange });
+    }
     return fail(
       'No glucose readings found in the file. Try a LibreView "Glucose Data" CSV, a Dexcom Clarity CSV or a Nightscout JSON file.',
+      makeDiagnostics({
+        rows: trace.rows ?? readings.length,
+        dates: trace.dates ?? 0,
+        values: trace.values ?? 0,
+        kept: 0,
+        removed,
+        notes: trace.notes ?? [],
+      }),
     );
   }
 
@@ -310,14 +342,21 @@ function parseLibreView(
   text: string,
   fileName: string,
   override?: DateOrder,
-  allowSparse = false,
 ): ParseOutcome {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((line) => {
     if (line.split(/[;,\t]/).length < 4) return false;
     return (TEXT.recordType.test(line) || TEXT.time.test(line)) && TEXT.glucose.test(line);
   });
-  if (start < 0)   return fail('LibreView header not found (no time and glucose columns).');
+  if (start < 0) {
+    return fail(
+      'LibreView header not found (no time and glucose columns).',
+      makeDiagnostics({
+        rows: lines.length,
+        notes: ['No LibreView header with time and glucose columns was found.'],
+      }),
+    );
+  }
 
   const parsed = Papa.parse<Record<string, string>>(lines.slice(start).join('\n'), {
     header: true,
@@ -328,7 +367,13 @@ function parseLibreView(
   const fields = parsed.meta.fields ?? [];
   const timeCol = findColumn(fields, TEXT.time);
   if (!timeCol) {
-    return fail(`Time column not found. Headers found: ${listHeaders(fields)}`);
+    return fail(
+      `Time column not found. Headers found: ${listHeaders(fields)}`,
+      makeDiagnostics({
+        rows: parsed.data.length,
+        notes: [`Headers: ${listHeaders(fields)}`],
+      }),
+    );
   }
 
   const typeCol = findColumn(fields, TEXT.recordType);
@@ -344,7 +389,13 @@ function parseLibreView(
   const carbCol = findColumn(fields, TEXT.carb);
 
   if (!historicCol && !scanCol && !stripCol) {
-    return fail(`Glucose column not found. Headers found: ${listHeaders(fields)}`);
+    return fail(
+      `Glucose column not found. Headers found: ${listHeaders(fields)}`,
+      makeDiagnostics({
+        rows: parsed.data.length,
+        notes: [`Headers: ${listHeaders(fields)}`],
+      }),
+    );
   }
 
   const rows = parsed.data;
@@ -355,6 +406,8 @@ function parseLibreView(
   const insulin: InsulinDose[] = [];
   const carbs: CarbEntry[] = [];
   let skipped = 0;
+  let dates = 0;
+  let values = 0;
 
   for (const row of rows) {
     const t = dateOf(row[timeCol] ?? '');
@@ -362,6 +415,7 @@ function parseLibreView(
       if (Object.values(row).some((value) => (value ?? '').trim())) skipped++;
       continue;
     }
+    dates++;
 
     const typeRaw = (typeCol ? row[typeCol] ?? '' : '').trim();
     const typeNum = typeRaw ? Number(typeRaw) : NaN;
@@ -381,6 +435,7 @@ function parseLibreView(
       kind = 'cgm';
     }
 
+    if (value !== null) values++;
     if (value !== null && value > 0) readings.push({ t, v: value, kind });
 
     if (rapidCol) {
@@ -414,7 +469,15 @@ function parseLibreView(
     },
     warnings,
     unitHint,
-    allowSparse,
+    {
+      rows: rows.length,
+      dates,
+      values,
+      removed: skipped
+        ? [{ label: 'skipped: the date could not be read', count: skipped }]
+        : [],
+      notes: [`Headers: ${listHeaders(fields)}`],
+    },
   );
 }
 
@@ -422,13 +485,20 @@ function parseDexcom(
   text: string,
   fileName: string,
   override?: DateOrder,
-  allowSparse = false,
 ): ParseOutcome {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex(
     (line) => line.split(/[;,\t]/).length >= 4 && TEXT.eventType.test(line) && TEXT.glucose.test(line),
   );
-  if (start < 0)   return fail('Dexcom Clarity header not found (no Event Type column).');
+  if (start < 0) {
+    return fail(
+      'Dexcom Clarity header not found (no Event Type column).',
+      makeDiagnostics({
+        rows: lines.length,
+        notes: ['No Dexcom header with an Event Type and glucose column was found.'],
+      }),
+    );
+  }
 
   const parsed = Papa.parse<Record<string, string>>(lines.slice(start).join('\n'), {
     header: true,
@@ -445,7 +515,13 @@ function parseDexcom(
   const carbCol = findColumn(fields, TEXT.carb);
 
   if (!timeCol || !typeCol || !glucoseCol) {
-    return fail(`The Dexcom file is missing a time, event type or glucose column. Headers found: ${listHeaders(fields)}`);
+    return fail(
+      `The Dexcom file is missing a time, event type or glucose column. Headers found: ${listHeaders(fields)}`,
+      makeDiagnostics({
+        rows: parsed.data.length,
+        notes: [`Headers: ${listHeaders(fields)}`],
+      }),
+    );
   }
 
   const rows = parsed.data;
@@ -456,6 +532,8 @@ function parseDexcom(
   const insulin: InsulinDose[] = [];
   const carbs: CarbEntry[] = [];
   let skipped = 0;
+  let dates = 0;
+  let values = 0;
 
   for (const row of rows) {
     const t = dateOf(row[timeCol] ?? '');
@@ -463,13 +541,16 @@ function parseDexcom(
       if (Object.values(row).some((value) => (value ?? '').trim())) skipped++;
       continue;
     }
+    dates++;
     const eventType = (row[typeCol] ?? '').trim().toLowerCase();
 
     if (/egv|glucose|glukose|glikoz|glucosa|glyc[ée]mie/.test(eventType)) {
       const value = toNumber(row[glucoseCol]);
+      if (value !== null) values++;
       if (value !== null && value > 0) readings.push({ t, v: value, kind: 'cgm' });
     } else if (/calib|kalibrier/.test(eventType)) {
       const value = toNumber(row[glucoseCol]);
+      if (value !== null) values++;
       if (value !== null && value > 0) readings.push({ t, v: value, kind: 'bg' });
     } else if (/insulin|ins[üu]lin/.test(eventType)) {
       const units = insulinCol ? toNumber(row[insulinCol]) : null;
@@ -500,16 +581,27 @@ function parseDexcom(
     },
     warnings,
     unitHint,
-    allowSparse,
+    {
+      rows: rows.length,
+      dates,
+      values,
+      removed: skipped
+        ? [{ label: 'skipped: the date could not be read', count: skipped }]
+        : [],
+      notes: [`Headers: ${listHeaders(fields)}`],
+    },
   );
 }
 
-function parseNightscout(text: string, fileName: string, allowSparse = false): ParseOutcome {
+function parseNightscout(text: string, fileName: string): ParseOutcome {
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
-    return fail('Could not read the JSON file. Upload the Nightscout export as-is.');
+    return fail(
+      'Could not read the JSON file. Upload the Nightscout export as-is.',
+      makeDiagnostics({ notes: ['The file did not contain valid JSON.'] }),
+    );
   }
 
   const root = json as Record<string, unknown>;
@@ -525,11 +617,16 @@ function parseNightscout(text: string, fileName: string, allowSparse = false): P
     : [];
 
   if (!entries) {
-    return fail('No "entries" array found in the JSON. A Nightscout or generic JSON export is expected.');
+    return fail(
+      'No "entries" array found in the JSON. A Nightscout or generic JSON export is expected.',
+      makeDiagnostics({ notes: ['The JSON has no "entries", "glucose" or entries array.'] }),
+    );
   }
 
   const readings: Reading[] = [];
   let skipped = 0;
+  let dates = 0;
+  let values = 0;
   let absolute = false;
   let utc = false;
   let wallClock = false;
@@ -537,6 +634,7 @@ function parseNightscout(text: string, fileName: string, allowSparse = false): P
   for (const entry of entries) {
     const raw = entry?.sgv ?? entry?.glucose ?? entry?.value ?? entry?.mbg;
     const value = toNumber(raw);
+    if (value !== null) values++;
     if (value === null || value <= 0) continue;
 
     let t: number | null = null;
@@ -567,6 +665,7 @@ function parseNightscout(text: string, fileName: string, allowSparse = false): P
       skipped++;
       continue;
     }
+    dates++;
 
     const type = String(entry?.type ?? '').toLowerCase();
     readings.push({ t, v: value, kind: type === 'mbg' ? 'bg' : 'cgm' });
@@ -617,7 +716,15 @@ function parseNightscout(text: string, fileName: string, allowSparse = false): P
     },
     warnings,
     undefined,
-    allowSparse,
+    {
+      rows: entries.length,
+      dates,
+      values,
+      removed: skipped
+        ? [{ label: 'skipped: the timestamp could not be read', count: skipped }]
+        : [],
+      notes: ['Nightscout entries array read.'],
+    },
   );
 }
 
@@ -626,7 +733,6 @@ function parseGenericCsv(
   fileName: string,
   override?: DateOrder,
   source = 'Generic CSV',
-  allowSparse = false,
 ): ParseOutcome {
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
@@ -648,6 +754,10 @@ function parseGenericCsv(
   if (!timeCol || !valueCol) {
     return fail(
       `Columns not recognized. A time and a glucose column are required; found: ${listHeaders(fields)}. Supported formats: LibreView CSV, Dexcom Clarity CSV, Nightscout JSON, a CSV with time + glucose columns, or a PDF containing a glucose readings table.`,
+      makeDiagnostics({
+        rows: parsed.data.length,
+        notes: [`Headers: ${listHeaders(fields)}`],
+      }),
     );
   }
 
@@ -662,19 +772,31 @@ function parseGenericCsv(
   const dateInfo = dateSetup(rows.map(timeOf), override);
   const dateOf = dateInfo.dateOf;
   const readings: Reading[] = [];
-  let skipped = 0;
+  let dates = 0;
+  let values = 0;
+  let skippedDates = 0;
+  let skippedValues = 0;
+  let invalidValues = 0;
 
   for (const row of rows) {
     const t = dateOf(timeOf(row));
     const value = toNumber(row[valueCol]);
-    if (t === null || value === null) {
-      skipped++;
+    if (t !== null) dates++;
+    if (value !== null) values++;
+    if (t === null) {
+      skippedDates++;
+      continue;
+    }
+    if (value === null) {
+      skippedValues++;
       continue;
     }
     if (value > 0) readings.push({ t, v: value, kind: 'cgm' });
+    else invalidValues++;
   }
 
   const warnings: string[] = [...dateInfo.warnings];
+  const skipped = skippedDates + skippedValues;
   if (skipped > 0) warnings.push(`${skipped} rows skipped (date or value could not be read).`);
   const unitHint = unitFromHeaders(fields);
 
@@ -691,7 +813,23 @@ function parseGenericCsv(
     },
     warnings,
     unitHint,
-    allowSparse,
+    {
+      rows: rows.length,
+      dates,
+      values,
+      removed: [
+        ...(skippedDates
+          ? [{ label: 'skipped: the date could not be read', count: skippedDates }]
+          : []),
+        ...(skippedValues
+          ? [{ label: 'skipped: the glucose value could not be read', count: skippedValues }]
+          : []),
+        ...(invalidValues
+          ? [{ label: 'skipped: the value was zero or negative', count: invalidValues }]
+          : []),
+      ],
+      notes: [`Headers: ${listHeaders(fields)}`],
+    },
   );
 }
 
@@ -929,12 +1067,14 @@ export function parsePdfLines(
   pages: string[],
   fileName: string,
   override?: DateOrder,
-  allowSparse = false,
 ): ParseOutcome {
   const text = pages.join('\n').trim();
   if (!text) {
     return fail(
       'This PDF contains no selectable text, so no readings could be extracted. It may be scanned or image-only; upload the original CSV or JSON export instead.',
+      makeDiagnostics({
+        notes: ['The PDF has no selectable text; OCR would be required.'],
+      }),
     );
   }
 
@@ -947,7 +1087,12 @@ export function parsePdfLines(
   const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
 
   if (!hasPdfReadingsTable(lines, text)) {
-    return fail(pdfSummaryMessage(text));
+    return fail(
+      pdfSummaryMessage(text),
+      makeDiagnostics({
+        notes: [`No readings table header was found (${lines.length} text lines scanned).`],
+      }),
+    );
   }
 
   const rows: Array<{ time: string; value: number }> = [];
@@ -991,7 +1136,14 @@ export function parsePdfLines(
     if (loose.length > rows.length) rows.splice(0, rows.length, ...loose);
   }
 
-  if (!rows.length) return fail(pdfSummaryMessage(text));
+  if (!rows.length) {
+    return fail(
+      pdfSummaryMessage(text),
+      makeDiagnostics({
+        notes: [`No date/time + glucose rows could be extracted (${lines.length} text lines scanned).`],
+      }),
+    );
+  }
 
   const unit = pdfUnit(text);
   const source = /libreview|freestyle libre/i.test(text)
@@ -1008,12 +1160,14 @@ export function parsePdfLines(
   const dateInfo = dateSetup(rows.map((row) => row.time), override);
   const readings: Reading[] = [];
   let skipped = 0;
+  let dates = 0;
   for (const row of rows) {
     const t = dateInfo.dateOf(row.time);
     if (t === null) {
       skipped++;
       continue;
     }
+    dates++;
     readings.push({ t, v: row.value, kind: 'cgm' });
   }
 
@@ -1036,12 +1190,27 @@ export function parsePdfLines(
     },
     warnings,
     unit,
-    allowSparse || rows.length >= 8,
+    {
+      rows: rows.length,
+      dates,
+      values: rows.length,
+      removed: skipped
+        ? [{ label: 'skipped: the PDF date could not be read', count: skipped }]
+        : [],
+      notes: [`PDF text lines scanned: ${lines.length}`],
+    },
   );
   if (!outcome.ok) {
     const uniqueTimes = new Set(rows.map((row) => row.time)).size;
     return fail(
       `The PDF table produced ${rows.length} rows with ${uniqueTimes} distinct timestamps, but no usable glucose readings remained. Export the raw CSV/JSON for a complete report.`,
+      outcome.diagnostics ??
+        makeDiagnostics({
+          rows: rows.length,
+          dates,
+          values: rows.length,
+          notes: [`PDF text lines scanned: ${lines.length}`],
+        }),
     );
   }
   outcome.warnings.unshift(
@@ -1082,33 +1251,35 @@ function parseText(
   text: string,
   fileName: string,
   override?: DateOrder,
-  allowSparse = false,
 ): ParseOutcome {
   const trimmed = text.replace(/^\uFEFF/, '').trim();
-  if (!trimmed) return fail('The file looks empty.');
+  if (!trimmed) {
+    return fail(
+      'The file looks empty.',
+      makeDiagnostics({ notes: ['The decoded file contained no text.'] }),
+    );
+  }
 
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return parseNightscout(trimmed, fileName, allowSparse);
+    return parseNightscout(trimmed, fileName);
   }
 
   const head = trimmed.slice(0, 8000);
   if (TEXT.eventType.test(head) && TEXT.glucose.test(head)) {
-    return parseDexcom(trimmed, fileName, override, allowSparse);
+    return parseDexcom(trimmed, fileName, override);
   }
   if (TEXT.recordType.test(head) && TEXT.glucose.test(head)) {
-    return parseLibreView(trimmed, fileName, override, allowSparse);
+    return parseLibreView(trimmed, fileName, override);
   }
   if (/device\s*timestamp|ger[äa]tezeitstempel|cihaz\s*zaman/i.test(head)) {
-    return parseLibreView(trimmed, fileName, override, allowSparse);
+    return parseLibreView(trimmed, fileName, override);
   }
-  return parseGenericCsv(trimmed, fileName, override, 'Generic CSV', allowSparse);
+  return parseGenericCsv(trimmed, fileName, override);
 }
 
 export interface ParseOptions {
   /** Force a date order instead of the one inferred from the file. */
   dateOrder?: DateOrder;
-  /** Analyze a sample with fewer than eight readings after explicit consent. */
-  allowSparse?: boolean;
 }
 
 export async function parseFile(file: File, options: ParseOptions = {}): Promise<ParseOutcome> {
@@ -1120,29 +1291,31 @@ export async function parseFile(file: File, options: ParseOptions = {}): Promise
       if (!pdf) {
         return fail(
           'This file has a .pdf name but is not a valid PDF. Upload the original CSV or JSON export instead.',
+          makeDiagnostics({ notes: ['The PDF signature (%PDF-) was not found in the file.'] }),
         );
       }
       try {
         const { extractPdfText } = await import('./pdf');
         const extracted = await extractPdfText(buffer);
-        return parsePdfLines(
-          extracted.pages,
-          file.name,
-          options.dateOrder,
-          options.allowSparse,
-        );
+        return parsePdfLines(extracted.pages, file.name, options.dateOrder);
       } catch (error) {
-        return fail(pdfErrorMessage(error));
+        return fail(
+          pdfErrorMessage(error),
+          makeDiagnostics({ notes: [`PDF extraction failed: ${pdfErrorMessage(error)}`] }),
+        );
       }
     }
 
     const { text, encoding } = decodeBuffer(buffer);
-    const outcome = parseText(text, file.name, options.dateOrder, options.allowSparse);
+    const outcome = parseText(text, file.name, options.dateOrder);
     if (outcome.ok && !encoding.startsWith('UTF-8')) {
       outcome.warnings.unshift(`File read as ${encoding} and converted to UTF-8.`);
     }
     return outcome;
   } catch (error) {
-    return fail(`Could not read the file: ${(error as Error).message}`);
+    return fail(
+      `Could not read the file: ${(error as Error).message}`,
+      makeDiagnostics({ notes: [`File read failed: ${(error as Error).message}`] }),
+    );
   }
 }
