@@ -1284,6 +1284,7 @@ function pdfTableOutcome(
   fileName: string,
   fallbackYear: string,
   override?: DateOrder,
+  allowSplitCellFallback = true,
 ): { outcome: ParseOutcome; rows: number } | null {
   if (!hasPdfReadingsTable(lines, text)) return null;
 
@@ -1300,9 +1301,11 @@ function pdfTableOutcome(
 
     // A reading row is "date time value", or "time value" under a date
     // header. Accept named months, hyphens, commas and row numbers so the
-    // table layout does not decide whether a reading survives.
+    // table layout does not decide whether a reading survives. The value must
+    // not be the hour of another clock: "00:00 06:00" would read "06" as
+    // glucose and invent a table that hid the Daily Log graph behind it.
     const row = line.match(
-      /^(.*?)\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)[,\s]+([<>]?\d{1,4}(?:[.,]\d+)?)\b/i,
+      /^(.*?)\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)[,\s]+([<>]?\d{1,4}(?:[.,]\d+)?)\b(?!:)/i,
     );
     if (!row) continue;
 
@@ -1323,7 +1326,9 @@ function pdfTableOutcome(
     if (value !== null) rows.push({ time: `${date} ${row[2]}`, value });
   }
 
-  if (rows.length < 8) {
+  if (rows.length < 8 && allowSplitCellFallback) {
+    // These rescues join tokens across lines, so they also turn chart labels
+    // into readings. Skip them when a Daily Log graph already provides data.
     const loose = pdfLooseRows(lines, fallbackYear);
     if (loose.length > rows.length) rows.splice(0, rows.length, ...loose);
     // Only trust the whole-page stream when the line parser found too little:
@@ -1412,6 +1417,18 @@ function pdfTableOutcome(
 }
 
 /**
+ * Some report fonts map punctuation to private-use code points: LibreView
+ * prints a clock as "00\uE09200", where U+E092 is its own colon, so a plain
+ * "00:00" match never sees a time. Between digits that glyph is a colon;
+ * elsewhere the private-use character is layout decoration, not data.
+ */
+function normalisePdfGlyphs(text: string): string {
+  return text
+    .replace(/(\d)[\uE000-\uF8FF](\d)/g, '$1:$2')
+    .replace(/[\uE000-\uF8FF]/g, ' ');
+}
+
+/**
  * Turn a PDF reading table back into the same time/value pairs the CSV path
  * understands. Summary reports deliberately fail here: their averages and
  * charts cannot be expanded into individual readings without inventing data.
@@ -1421,7 +1438,7 @@ export function parsePdfLines(
   fileName: string,
   override?: DateOrder,
 ): ParseOutcome {
-  const text = pages.join('\n').trim();
+  const text = normalisePdfGlyphs(pages.join('\n')).trim();
   if (!text) {
     return fail(
       'This PDF contains no selectable text, so no readings could be extracted. It may be scanned or image-only; upload the original CSV or JSON export instead.',
@@ -1439,12 +1456,15 @@ export function parsePdfLines(
   // current year rather than refusing every date header that omits it.
   const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
 
-  const table = pdfTableOutcome(lines, text, fileName, fallbackYear, override);
+  // A graph-only report must not be "rescued" into a few invented table rows,
+  // so the split-cell fallback only runs when there is no usable graph.
+  const daily = pdfDailyLogRows(text, fallbackYear);
+  const hasGraph = Boolean(daily && daily.rows.length >= 8);
+  const table = pdfTableOutcome(lines, text, fileName, fallbackYear, override, !hasGraph);
   // A printed date/time table is the exact series and wins over graph labels.
   // A stray header match that yields too few rows is not a table, so the Daily
   // Log graph still stands in for graph-only reports.
   if (!table || !table.outcome.ok || table.rows < 8) {
-    const daily = pdfDailyLogRows(text, fallbackYear);
     if (daily) return pdfDailyOutcome(daily, fileName, text, override);
   }
   if (table) return table.outcome;
