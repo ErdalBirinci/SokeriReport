@@ -310,13 +310,13 @@ export default function Report({
               threshold={targets.low}
               unit={unit}
             />
-            {metrics.hypoReadings > 0 && (
+            {metrics.hypoWindow.meaningful && (
               <div className="callout">
-                Most frequent window:{' '}
+                Lows cluster at{' '}
                 <b>
                   {clockLabel(metrics.hypoWindow.start)}–{clockLabel(metrics.hypoWindow.end)}
                 </b>{' '}
-                · {fmt1(metrics.hypoWindow.share)}% of lows · night share{' '}
+                · {fmt1(metrics.hypoWindow.share)}% of {metrics.hypoReadings} lows · night share{' '}
                 {fmt1(metrics.nightHypoShare)}%
               </div>
             )}

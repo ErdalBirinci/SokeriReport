@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ArchiveSummary } from '../lib/archive';
 import { dateLong } from '../lib/format';
+import { trapFocus } from '../lib/focusTrap';
 
 interface Props {
   entries: ArchiveSummary[];
@@ -29,6 +30,12 @@ export default function ArchiveDialog({
 }: Props) {
   const [label, setLabel] = useState(defaultLabel);
   const [passphrase, setPassphrase] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
+  // Captured during render, before autoFocus moves focus into the dialog.
+  const openerRef = useRef<HTMLElement | null>(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -38,20 +45,33 @@ export default function ArchiveDialog({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const ready = passphrase.length >= 8;
+  useEffect(() => {
+    const node = modalRef.current;
+    if (!node) return;
+    return trapFocus(node, openerRef.current);
+  }, []);
+
+  const longEnough = passphrase.length >= 8;
+  const matches = confirmation === passphrase;
+  // Opening an existing report only needs the passphrase; saving a new one
+  // needs both fields to match, because there is no recovery.
+  const canSaveNow = canSave && longEnough && matches;
 
   return (
     <div className="print-modal-backdrop no-print">
       <div
+        ref={modalRef}
         className="print-modal archive-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="archive-title"
+        aria-describedby="archive-intro"
       >
         <h2 id="archive-title">Encrypted local archive</h2>
-        <p>
+        <p id="archive-intro">
           Reports are encrypted in this browser with AES-256-GCM and a passphrase-derived key. The
-          passphrase and the data never leave this device.
+          passphrase and the data never leave this device. Clearing site data in your browser
+          removes saved reports.
         </p>
 
         <div className="option-fields">
@@ -73,23 +93,39 @@ export default function ArchiveDialog({
               autoComplete="new-password"
             />
           </label>
+          <label className="option-field">
+            <span>Repeat passphrase (needed to save)</span>
+            <input
+              type="password"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              autoComplete="new-password"
+              aria-invalid={confirmation.length > 0 && !matches}
+            />
+          </label>
         </div>
 
         <div className="archive-save-row">
           <button
             className="btn btn-primary btn-sm"
             type="button"
-            disabled={!canSave || !ready || busy}
+            disabled={!canSaveNow || busy}
             onClick={() => onSave(label, passphrase)}
           >
             Save current report
           </button>
           <span className="archive-hint">
-            The same passphrase opens every saved report. There is no recovery.
+            {longEnough && !matches
+              ? 'The two passphrases do not match.'
+              : 'The same passphrase opens every saved report. There is no recovery.'}
           </span>
         </div>
 
-        {notice && <p className="archive-notice">{notice}</p>}
+        {notice && (
+          <p className="archive-notice" role="status">
+            {notice}
+          </p>
+        )}
         {error && (
           <p className="archive-error" role="alert">
             {error}
@@ -113,7 +149,7 @@ export default function ArchiveDialog({
                   <button
                     className="btn btn-ghost btn-xs"
                     type="button"
-                    disabled={!ready || busy}
+                    disabled={!longEnough || busy}
                     onClick={() => onOpen(entry.id, passphrase)}
                   >
                     Open

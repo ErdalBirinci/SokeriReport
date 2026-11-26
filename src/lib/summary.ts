@@ -39,11 +39,11 @@ export function buildSummary(
 
   lines.push('RISKS');
   lines.push(
-    `• Hypoglycemia: ${metrics.hypoEvents.length} ${metrics.hypoEvents.length === 1 ? 'event' : 'events'}, longest ${metrics.longestHypoMinutes} min, level 2: ${metrics.severeHypoCount}, night share ${fmtInt(metrics.nightHypoShare)}%`,
+    `• Hypoglycemia: ${metrics.hypoEvents.length} ${metrics.hypoEvents.length === 1 ? 'event' : 'events'}, longest ${metrics.longestHypoMinutes} min, level 2: ${metrics.level2HypoCount}, night share ${fmtInt(metrics.nightHypoShare)}%`,
   );
-  if (metrics.hypoReadings > 0) {
+  if (metrics.hypoWindow.meaningful) {
     lines.push(
-      `• Most frequent hypoglycemia window ${clockLabel(metrics.hypoWindow.start)}–${clockLabel(metrics.hypoWindow.end)} (${fmtInt(metrics.hypoWindow.share)}% of lows)`,
+      `• Low readings cluster ${clockLabel(metrics.hypoWindow.start)}–${clockLabel(metrics.hypoWindow.end)} (${fmtInt(metrics.hypoWindow.share)}% of ${metrics.hypoReadings} lows)`,
     );
   }
   if (metrics.dawn.eligible > 0) {

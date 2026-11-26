@@ -391,8 +391,11 @@ async function runA4Test(chromePath: string): Promise<void> {
           const module = await import(new URL('src/lib/printFit.ts', document.baseURI).href);
           return module.prepareReportForPrint();
         })()`);
-        expect(preflight?.fits).toBe(true);
-        expect(preflight.height).toBeLessThanOrEqual(preflight.pageHeight);
+        expect(preflight?.fits, JSON.stringify(preflight)).toBe(true);
+        expect(preflight.height).toBeLessThanOrEqual(preflight.pageHeight - 16);
+        // Fitting must not be bought with unreadable print type.
+        expect(preflight.summarySize).toBeGreaterThanOrEqual(6.8);
+        expect(preflight.scalePercent).toBeGreaterThanOrEqual(87);
 
         const result = await cdp.send('Page.printToPDF', {
           printBackground: true,

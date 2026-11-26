@@ -52,6 +52,8 @@ export default function DropZone({ onFiles, busy }: Props) {
       role="button"
       tabIndex={0}
       aria-label="Upload a glucose data file"
+      aria-busy={busy}
+      aria-disabled={busy}
       onClick={pick}
       onKeyDown={handleKey}
       onDragEnter={handleDragEnter}

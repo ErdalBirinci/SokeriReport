@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { trapFocus } from '../lib/focusTrap';
 import type { PrintOptions } from '../lib/printOptions';
 
 interface Props {
@@ -9,6 +10,11 @@ interface Props {
 
 export default function PrintOptionsDialog({ initial, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<PrintOptions>(initial);
+  const modalRef = useRef<HTMLDivElement>(null);
+  // Captured during render, before autoFocus moves focus into the dialog.
+  const openerRef = useRef<HTMLElement | null>(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -18,19 +24,30 @@ export default function PrintOptionsDialog({ initial, onSave, onClose }: Props) 
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    const node = modalRef.current;
+    if (!node) return;
+    return trapFocus(node, openerRef.current);
+  }, []);
+
   const update = <K extends keyof PrintOptions>(key: K, value: PrintOptions[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   return (
     <div className="print-modal-backdrop no-print">
       <div
+        ref={modalRef}
         className="print-modal print-options-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="print-options-title"
+        aria-describedby="print-options-intro"
       >
         <h2 id="print-options-title">Print setup</h2>
-        <p>Customize the printed A4 report. Optional sections are measured again before printing.</p>
+        <p id="print-options-intro">
+          Customize the printed A4 report. Optional sections are measured again before printing, and
+          these settings are remembered in this browser.
+        </p>
 
         <div className="option-fields">
           <label className="option-field">

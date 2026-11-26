@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { MIN_SUMMARY_SIZE, PRINT_FIT_STEPS, SAFETY } from '../src/lib/printFit';
 
 const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
@@ -44,8 +45,8 @@ describe('optional print layout', () => {
     expect(rule(block, '.comparison-grid')).toContain(
       'grid-template-columns: repeat(5, minmax(0, 1fr))',
     );
-    expect(rule(block, '.comparison-warning')).toMatch(/font-size:\s*5\.8px/);
-    expect(rule(block, '.comparison-warning')).toMatch(/line-height:\s*1\.2/);
+    expect(rule(block, '.comparison-warning')).toMatch(/font-size:\s*6\.8px/);
+    expect(rule(block, '.comparison-warning')).toMatch(/line-height:\s*1\.25/);
     expect(rule(block, '.comparison-warning')).toMatch(/padding:\s*2px 4px/);
   });
 
@@ -54,7 +55,29 @@ describe('optional print layout', () => {
     expect(optional).toContain('display: grid');
     expect(optional).toContain('grid-template-columns: 60px minmax(0, 1fr)');
     expect(block).toMatch(/\.print-optional \.quality-note[\s\S]*?display:\s*none/);
-    expect(rule(block, '.chart-agp svg')).toMatch(/height:\s*205px/);
+    expect(rule(block, '.chart-agp svg')).toMatch(/height:\s*170px/);
+  });
+
+  test('keeps every printed font readable', () => {
+    const sizes = [...block.matchAll(/font-size:\s*([\d.]+)px/g)].map((match) => Number(match[1]));
+    expect(sizes.length).toBeGreaterThan(20);
+    // Below roughly 5 pt a clinical printout cannot be read reliably.
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(6.5);
+  });
+
+  test('keeps the summary readable and prefers columns over shrinking', () => {
+    expect(rule(block, '.summary-print')).toContain('font-size: var(--print-summary-size, 7.8px)');
+    expect(PRINT_FIT_STEPS[0].size).toBeGreaterThanOrEqual(7.6);
+    expect(MIN_SUMMARY_SIZE).toBeGreaterThanOrEqual(6.8);
+
+    const twoColumnIndex = PRINT_FIT_STEPS.findIndex((step) => step.columns === 2);
+    expect(twoColumnIndex).toBeGreaterThan(0);
+    // Two columns must come before any step that shrinks the type further.
+    expect(PRINT_FIT_STEPS[twoColumnIndex].size).toBe(PRINT_FIT_STEPS[0].size);
+  });
+
+  test('keeps a pagination safety gap under the printed content', () => {
+    expect(SAFETY).toBeGreaterThanOrEqual(16);
   });
 
   test('does not drop the quality chip styling while merging rules', () => {

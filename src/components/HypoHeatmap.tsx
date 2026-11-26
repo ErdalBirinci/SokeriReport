@@ -16,8 +16,17 @@ export default function HypoHeatmap({ matrix, unit, threshold }: Props) {
     return <p className="chart-note">No day-level data available for the heatmap.</p>;
   }
 
+  const perHour = hours.map((hour) =>
+    matrix.reduce((sum, day) => sum + (day.hours[hour] ?? 0), 0),
+  );
+  const peakHour = perHour.indexOf(Math.max(...perHour));
+  const description =
+    `Hypoglycemia heatmap: ${total} low ${total === 1 ? 'reading' : 'readings'} below ${fmtGlucose(threshold, unit)} ${unit} ` +
+    `across ${matrix.length} ${matrix.length === 1 ? 'day' : 'days'}` +
+    (total > 0 ? `, most often around ${String(peakHour).padStart(2, '0')}:00.` : '.');
+
   return (
-    <div className="hypo-heatmap">
+    <div className="hypo-heatmap" role="img" aria-label={description}>
       <div className="heatmap-scroll">
         <div className="heatmap-grid" style={{ gridTemplateColumns: `54px repeat(24, minmax(18px, 1fr))` }}>
           <span className="heatmap-corner" />

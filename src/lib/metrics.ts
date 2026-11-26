@@ -8,6 +8,10 @@ export const VERY_LOW = 54;
 export const VERY_HIGH = 250;
 export const TIGHT_HIGH = 140;
 
+/** A "cluster" window is only reported with enough lows to be plausible. */
+export const HYPO_WINDOW_MIN_READINGS = 3;
+export const HYPO_WINDOW_MIN_SHARE = 25;
+
 /** Dawn phenomenon windows (local clock hours, inclusive start / exclusive end). */
 export const NIGHT_WINDOW = { start: 0, end: 4 };
 export const DAWN_WINDOW = { start: 5, end: 8 };
@@ -112,7 +116,8 @@ export interface HypoEvent {
   end: number;
   minutes: number;
   nadir: number;
-  severe: boolean;
+  /** Nadir below 54 mg/dL: International Consensus level 2 hypoglycemia. */
+  level2: boolean;
 }
 
 export interface Insight {
@@ -170,12 +175,14 @@ export interface Metrics {
   targets: TargetProfile;
   hypoReadings: number;
   hypoEvents: HypoEvent[];
-  severeHypoCount: number;
+  /** Number of level 2 events (nadir below 54 mg/dL). */
+  level2HypoCount: number;
   longestHypoMinutes: number;
   nightHypoShare: number;
   hourly: HourBucket[];
   days: DayStat[];
-  hypoWindow: { start: number; end: number; count: number; share: number };
+  /** Best 3-hour window, only meaningful with enough low readings to support the claim. */
+  hypoWindow: { start: number; end: number; count: number; share: number; meaningful: boolean };
   hypoByHour: number[];
   hypoMatrix: HypoDay[];
   dawn: {
@@ -211,6 +218,22 @@ function percentile(sorted: number[], p: number): number {
 
 const mean = (values: number[]): number =>
   values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
+
+/**
+ * Loop-based extent: `Math.min(...values)` overflows the call stack on long
+ * CGM exports (a 90-day one-minute series is ~130,000 readings).
+ */
+function extent(values: number[]): { min: number; max: number } {
+  if (!values.length) return { min: 0, max: 0 };
+  let min = values[0];
+  let max = values[0];
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return { min, max };
+}
 
 const stdDev = (values: number[], avg: number): number => {
   if (values.length < 2) return 0;
@@ -267,7 +290,7 @@ function detectHypoEvents(readings: Reading[], intervalMin: number, low: number)
   const close = () => {
     if (start === null || last === null) return;
     const minutes = Math.round((last - start) / 60_000) + intervalMin;
-    events.push({ start, end: last, minutes, nadir, severe: nadir < VERY_LOW });
+    events.push({ start, end: last, minutes, nadir, level2: nadir < VERY_LOW });
     start = null;
     last = null;
     nadir = Number.POSITIVE_INFINITY;
@@ -305,6 +328,7 @@ function dailyStats(readings: Reading[], low: number, high: number): DayStat[] {
     const nums = values.map((v) => v.v);
     const avg = mean(nums);
     const sd = stdDev(nums, avg);
+    const { min, max } = extent(nums);
     days.push({
       key,
       label: dayLabel(values[0].t),
@@ -313,8 +337,8 @@ function dailyStats(readings: Reading[], low: number, high: number): DayStat[] {
       tir: percent(nums.filter((v) => v >= low && v <= high).length, nums.length),
       low: percent(nums.filter((v) => v < low).length, nums.length),
       high: percent(nums.filter((v) => v > high).length, nums.length),
-      min: Math.min(...nums),
-      max: Math.max(...nums),
+      min,
+      max,
       cv: avg > 0 ? (sd / avg) * 100 : 0,
     });
   }
@@ -514,7 +538,7 @@ function buildInsights(
     out.push({
       tone: 'danger',
       title: `Level 2 hypoglycemia ${p1(m.veryLow)}%`,
-      body: `Readings below ${fmtGlucose(VERY_LOW, unit)} ${unit} exceed the <1% target; ${m.severeHypoCount} severe events recorded.`,
+      body: `Readings below ${fmtGlucose(VERY_LOW, unit)} ${unit} exceed the <1% target; ${m.level2HypoCount} level 2 ${m.level2HypoCount === 1 ? 'event' : 'events'} recorded.`,
     });
   } else if (lowTotal > t.lowGoal) {
     out.push({
@@ -562,12 +586,12 @@ function buildInsights(
     });
   }
 
-  if (m.hypoReadings > 0 && m.hypoWindow.count > 0) {
+  if (m.hypoWindow.meaningful) {
     const overnight = m.hypoWindow.start >= 22 || m.hypoWindow.start < 6;
     out.push({
       tone: overnight ? 'warn' : 'info',
-      title: `Most frequent hypoglycemia ${clock(m.hypoWindow.start)}–${clock(m.hypoWindow.end)}`,
-      body: `${Math.round(m.hypoWindow.share)}% of low readings fall in this 3-hour window; night share ${Math.round(m.nightHypoShare)}%.`,
+      title: `Hypoglycemia cluster ${clock(m.hypoWindow.start)}–${clock(m.hypoWindow.end)}`,
+      body: `${Math.round(m.hypoWindow.share)}% of the ${m.hypoReadings} low readings fall in this 3-hour window (n=${m.hypoWindow.count}); night share ${Math.round(m.nightHypoShare)}%.`,
     });
   }
 
@@ -644,7 +668,7 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
 
   const hypoEvents = detectHypoEvents(readings, intervalMin, targets.low);
   const longestHypoMinutes = hypoEvents.reduce((max, e) => Math.max(max, e.minutes), 0);
-  const severeHypoCount = hypoEvents.filter((e) => e.severe).length;
+  const level2HypoCount = hypoEvents.filter((e) => e.level2).length;
 
   const hourly = hourlyProfile(readings, targets.low);
   const hypoByHour = hourly.map((h) => h.hypo);
@@ -661,6 +685,18 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
       windowStart = s;
     }
   }
+  // A sliding window can start before the first low of the cluster; report the
+  // window from the first hour that actually has low readings.
+  for (let step = 0; step < 2; step += 1) {
+    if (hypoByHour[((windowStart % 24) + 24) % 24] > 0) break;
+    windowStart = (windowStart + 1) % 24;
+  }
+
+  const windowCountSafe = Math.max(0, windowCount);
+  const windowShare = percent(windowCountSafe, hypoReadings);
+  const windowMeaningful =
+    hypoReadings >= HYPO_WINDOW_MIN_READINGS && windowShare >= HYPO_WINDOW_MIN_SHARE;
+  const { min, max } = extent(values);
 
   const dawn = dawnAnalysis(readings);
   const days = dailyStats(readings, targets.low, targets.high);
@@ -683,8 +719,8 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
     mean: avg,
     sd,
     cv,
-    min: Math.min(...values),
-    max: Math.max(...values),
+    min,
+    max,
     gmi: 3.31 + 0.02392 * avg,
     ea1c: (avg + 46.7) / 28.7,
     veryLow: veryLowPct,
@@ -698,7 +734,7 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
     targets,
     hypoReadings,
     hypoEvents,
-    severeHypoCount,
+    level2HypoCount,
     longestHypoMinutes,
     nightHypoShare: hypoReadings > 0 ? percent(nightHypo, hypoReadings) : 0,
     hourly,
@@ -706,8 +742,9 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
     hypoWindow: {
       start: windowStart,
       end: (windowStart + 3) % 24,
-      count: Math.max(0, windowCount),
-      share: percent(Math.max(0, windowCount), hypoReadings),
+      count: windowMeaningful ? windowCountSafe : 0,
+      share: windowMeaningful ? windowShare : 0,
+      meaningful: windowMeaningful,
     },
     hypoByHour,
     hypoMatrix: hypoMatrixData,

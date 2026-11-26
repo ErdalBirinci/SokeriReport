@@ -226,12 +226,22 @@ function listHeaders(fields: string[]): string {
   return fields.length ? fields.slice(0, 8).join(' · ') : '(header row could not be read)';
 }
 
+/** Read an explicit unit from the header row, if the export states one. */
+function unitFromHeaders(fields: string[]): 'mg/dL' | 'mmol/L' | undefined {
+  const headers = fields.join(' ');
+  if (/mmol/i.test(headers)) return 'mmol/L';
+  if (/mg\s*\/?\s*dl/i.test(headers)) return 'mg/dL';
+  return undefined;
+}
+
 function finalize(
   readings: Reading[],
   insulin: InsulinDose[],
   carbs: CarbEntry[],
   meta: Dataset['meta'],
   warnings: string[],
+  /** Unit stated by the column headers; beats guessing from the value spread. */
+  unitHint?: 'mg/dL' | 'mmol/L',
 ): ParseOutcome {
   const valid = readings.filter((r) => Number.isFinite(r.t) && r.v > 0 && r.v < 800);
   if (!valid.length) {
@@ -257,7 +267,10 @@ function finalize(
 
   const sorted = deduped.map((r) => r.v).sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
-  const isMmol = median > 0 && median < 40;
+  // A header that names the unit is authoritative; otherwise mmol/L values are
+  // far below 40 while mg/dL values are almost never centred that low.
+  const isMmol =
+    unitHint === 'mmol/L' ? true : unitHint === 'mg/dL' ? false : median > 0 && median < 40;
 
   const normalised: Reading[] = deduped.map((r) => ({
     ...r,
@@ -372,6 +385,7 @@ function parseLibreView(text: string, fileName: string, override?: DateOrder): P
 
   const warnings: string[] = [...dateInfo.warnings];
   if (skipped > 0) warnings.push(`${skipped} rows skipped because the date could not be read.`);
+  const unitHint = unitFromHeaders(fields);
 
   return finalize(
     readings,
@@ -380,11 +394,12 @@ function parseLibreView(text: string, fileName: string, override?: DateOrder): P
     {
       source: 'LibreView',
       fileName,
-      unit: /mmol/i.test(fields.join(' ')) ? 'mmol/L' : 'mg/dL',
+      unit: unitHint ?? 'mg/dL',
       date: dateInfo.meta,
       time: dateInfo.time,
     },
     warnings,
+    unitHint,
   );
 }
 
@@ -450,6 +465,7 @@ function parseDexcom(text: string, fileName: string, override?: DateOrder): Pars
 
   const warnings: string[] = [...dateInfo.warnings];
   if (skipped > 0) warnings.push(`${skipped} rows skipped because the date could not be read.`);
+  const unitHint = unitFromHeaders(fields);
 
   return finalize(
     readings,
@@ -458,11 +474,12 @@ function parseDexcom(text: string, fileName: string, override?: DateOrder): Pars
     {
       source: 'Dexcom Clarity',
       fileName,
-      unit: /mmol/i.test(fields.join(' ')) ? 'mmol/L' : 'mg/dL',
+      unit: unitHint ?? 'mg/dL',
       date: dateInfo.meta,
       time: dateInfo.time,
     },
     warnings,
+    unitHint,
   );
 }
 
@@ -616,6 +633,7 @@ function parseGenericCsv(text: string, fileName: string, override?: DateOrder): 
 
   const warnings: string[] = [...dateInfo.warnings];
   if (skipped > 0) warnings.push(`${skipped} rows skipped (date or value could not be read).`);
+  const unitHint = unitFromHeaders(fields);
 
   return finalize(
     readings,
@@ -624,11 +642,12 @@ function parseGenericCsv(text: string, fileName: string, override?: DateOrder): 
     {
       source: 'Generic CSV',
       fileName,
-      unit: /mmol/i.test(fields.join(' ')) ? 'mmol/L' : 'mg/dL',
+      unit: unitHint ?? 'mg/dL',
       date: dateInfo.meta,
       time: dateInfo.time,
     },
     warnings,
+    unitHint,
   );
 }
 

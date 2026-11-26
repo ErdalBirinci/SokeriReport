@@ -7,6 +7,8 @@ export interface ArchivePayload {
   dataset: Dataset;
   /** Missing on archives saved before report periods were introduced. */
   period?: ReportPeriod;
+  /** Parse warnings at save time; missing on older archives. */
+  warnings?: string[];
   patient: string;
   note: string;
   summaryOverride: string | null;
@@ -142,6 +144,7 @@ export async function saveArchive(
   passphrase: string,
   payload: ArchivePayload,
 ): Promise<ArchiveSummary> {
+  await requestPersistentStorage();
   const encrypted = await encryptPayload(payload, passphrase);
   const record: StoredRecord = {
     id: crypto.randomUUID(),
@@ -185,6 +188,24 @@ export async function loadArchive(id: string, passphrase: string): Promise<Archi
     return await decryptPayload<ArchivePayload>(record, passphrase);
   } finally {
     db.close();
+  }
+}
+
+let persistenceRequested = false;
+
+/**
+ * Ask the browser not to evict the archive under storage pressure. Best
+ * effort: browsers may decline silently, which is why the archive UI warns
+ * that clearing site data removes saved reports.
+ */
+export async function requestPersistentStorage(): Promise<boolean | null> {
+  if (persistenceRequested) return null;
+  persistenceRequested = true;
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return null;
+    return await navigator.storage.persist();
+  } catch {
+    return null;
   }
 }
 
