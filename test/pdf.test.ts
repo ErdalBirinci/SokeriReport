@@ -130,6 +130,49 @@ describe('PDF report imports', () => {
     expect(outcome.dataset.readings[0].v).toBe(100);
   });
 
+  test('keeps days whose headers include Turkish or German weekday names', () => {
+    const dayRows = (base: number): string[] =>
+      Array.from({ length: 6 }, (_, index) => {
+        const minute = index * 5;
+        return `08:${String(minute).padStart(2, '0')} ${base + index}`;
+      });
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Günlük Kayıt',
+        'Saat Glikoz (mg/dL)',
+        '27.10.2026 Salı',
+        ...dayRows(100),
+        '28.10.2026 Çarşamba',
+        ...dayRows(120),
+        '29.10.2026, Perşembe',
+        ...dayRows(140),
+        '30.10.2026 Montag',
+        ...dayRows(160),
+      ),
+      'weekday-headers.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(24);
+    expect(new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString())).size).toBe(4);
+  });
+
+  test('recovers rows whose date, time and value are on separate lines', () => {
+    const lines = ['LibreView Glucose Readings', 'Date Time Glucose (mg/dL)'];
+    for (let index = 0; index < 10; index += 1) {
+      const day = 27 + Math.floor(index / 5);
+      const minute = (index % 5) * 5;
+      lines.push(`${day}.10.2026`, `08:${String(minute).padStart(2, '0')}`, `${100 + index}`);
+    }
+    const outcome = parsePdfLines(page(...lines), 'split-cells.pdf');
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(10);
+    expect(new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString())).size).toBe(2);
+  });
+
   test('converts a mmol/L readings table to mg/dL', () => {
     const outcome = parsePdfLines(
       page(

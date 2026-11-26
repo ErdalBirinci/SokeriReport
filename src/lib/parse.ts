@@ -34,7 +34,7 @@ const TEXT = {
   eventType: /(event\s*type|ereignistyp|olay\s*t[üu]r[üu]|tipo\s*de\s*evento|type\s*d.?[ée]v[ée]nement)/i,
   eventSubtype: /(event\s*subtype|ereignisuntertyp|olay\s*alt|subtipo|sous-type)/i,
   genericValue: /(glucose|glukose|glikoz|glucosa|glyc[ée]mie|kan\s*[şs]ekeri|[şs]eker|sgv|de[ğg]er|value|mg\s*\/?\s*dl|mmol)/i,
-  genericTime: /(time|date|timestamp|zaman|tarih|datum|fecha|horodatage|uhrzeit)/i,
+  genericTime: /(time|date|timestamp|zaman|tarih|datum|fecha|horodatage|uhrzeit|saat)/i,
 } as const;
 
 const fail = (error: string, diagnostics?: ParseDiagnostics): ParseOutcome =>
@@ -833,9 +833,13 @@ function parseGenericCsv(
   );
 }
 
-const PDF_READINGS_TITLE = /glucose readings|sensor glucose readings|glucose values|readings report/i;
+const PDF_READINGS_TITLE =
+  /glucose readings|sensor glucose readings|glucose values|readings report|glikoz okumaları|glikoz ölçümleri|şeker ölçümleri|günlük kayıt|glukosewerte|glukose-messungen/i;
 const PDF_SUMMARY =
   /average glucose|mean glucose|time in range|glucose management indicator|ambulatory glucose profile|\bAGP\b/i;
+
+const WEEKDAY =
+  '(?:mon|tue|wed|thu|fri|sat|sun|pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|lunedì|lunedi|martedì|martedi|mercoledì|mercoledi|giovedì|giovedi|venerdì|venerdi|domenica|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)';
 
 const MONTHS: Record<string, string> = {
   jan: '01',
@@ -878,6 +882,16 @@ const MONTHS: Record<string, string> = {
   lug: '07',
   set: '09',
   ott: '10',
+  fév: '02',
+  fev: '02',
+  avr: '04',
+  jui: '07',
+  aoû: '08',
+  aou: '08',
+  déc: '12',
+  maa: '03',
+  mei: '05',
+  out: '10',
 };
 
 function pdfUnit(text: string): 'mg/dL' | 'mmol/L' | undefined {
@@ -927,7 +941,7 @@ function hasPdfReadingsTable(lines: string[], text: string): boolean {
     if (/average|mean|median|statistics|distribution|percentile|time in range|target range/i.test(line)) {
       return false;
     }
-    return TEXT.glucose.test(line) && /(date|time|timestamp|zeit|tarih|zaman|datum)/i.test(line);
+    return TEXT.glucose.test(line) && /(date|time|timestamp|zeit|tarih|zaman|datum|saat)/i.test(line);
   });
 }
 
@@ -947,9 +961,9 @@ function normaliseYear(raw: string): string | null {
  */
 function pdfDateHeader(line: string, fallbackYear: string | null): string | null {
   const stripped = line
-    .replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.]?\s+/i, '')
-    .replace(/\s*\((?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\)\s*$/i, '')
-    .replace(/\s+(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*$/i, '')
+    .replace(new RegExp(`^${WEEKDAY}[a-zçğıöşü]*[,.]?\\s+`, 'i'), '')
+    .replace(new RegExp(`\\s*\\(${WEEKDAY}[a-zçğıöşü]*\\)\\s*$`, 'i'), '')
+    .replace(new RegExp(`[\\s,]+${WEEKDAY}[a-zçğıöşü]*\\s*$`, 'i'), '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -1059,6 +1073,57 @@ function pdfLooseRows(lines: string[], fallbackYear: string): Array<{ time: stri
 }
 
 /**
+ * Some PDF producers put the date, the clock and the value on separate lines
+ * even though they belong to one table row. Joining the page flow recovers
+ * those rows; the ordinary line parser cannot see them.
+ */
+function pdfStreamRows(pages: string[]): Array<{ time: string; value: number }> {
+  const stream = pages.join(' ').replace(/\s+/g, ' ').trim();
+  if (!stream) return [];
+
+  const dateToken =
+    '(?:\\d{4}[./-]\\d{1,2}[./-]\\d{1,2}|\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}|\\d{1,2}[\\s./-]+[A-Za-zÀ-ÿĀ-ž]{3,12}\\.?[\\s./,-]+\\d{2,4}|[A-Za-zÀ-ÿĀ-ž]{3,12}[\\s./-]+\\d{1,2},?[\\s./,-]+\\d{2,4})';
+  const timeToken = '\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s*[AP]M)?';
+  const valueToken = '[<>]?\\d{1,4}(?:[.,]\\d+)?';
+  const patterns = [
+    new RegExp(`(${dateToken})\\s+(${timeToken})\\s+(${valueToken})`, 'gi'),
+    new RegExp(`(${valueToken})\\s+(${timeToken})\\s+(${dateToken})`, 'gi'),
+    new RegExp(`(${dateToken})\\s+(${valueToken})\\s+(${timeToken})`, 'gi'),
+    new RegExp(`(${timeToken})\\s+(${dateToken})\\s+(${valueToken})`, 'gi'),
+    new RegExp(`(${valueToken})\\s+(${dateToken})\\s+(${timeToken})`, 'gi'),
+  ];
+
+  const rows: Array<{ time: string; value: number }> = [];
+  const push = (date: string, time: string, value: number) => {
+    const parsedDate = pdfDateHeader(date, null);
+    if (!parsedDate) return;
+    rows.push({ time: `${parsedDate} ${time}`, value });
+  };
+
+  for (const match of stream.matchAll(patterns[0])) {
+    const value = pdfNumeric(match[3]);
+    if (value !== null) push(match[1], match[2], value);
+  }
+  for (const match of stream.matchAll(patterns[1])) {
+    const value = pdfNumeric(match[1]);
+    if (value !== null) push(match[3], match[2], value);
+  }
+  for (const match of stream.matchAll(patterns[2])) {
+    const value = pdfNumeric(match[2]);
+    if (value !== null) push(match[1], match[3], value);
+  }
+  for (const match of stream.matchAll(patterns[3])) {
+    const value = pdfNumeric(match[3]);
+    if (value !== null) push(match[2], match[1], value);
+  }
+  for (const match of stream.matchAll(patterns[4])) {
+    const value = pdfNumeric(match[1]);
+    if (value !== null) push(match[2], match[3], value);
+  }
+  return rows;
+}
+
+/**
  * Turn a PDF reading table back into the same time/value pairs the CSV path
  * understands. Summary reports deliberately fail here: their averages and
  * charts cannot be expanded into individual readings without inventing data.
@@ -1116,7 +1181,7 @@ export function parsePdfLines(
 
     const prefix = row[1]
       .trim()
-      .replace(/^\d{1,4}\s+/, '')
+      .replace(/^\d{1,4}[.)]?\s+/, '')
       .replace(/[,;]$/, '');
     let date = currentDate;
     if (prefix) {
@@ -1134,6 +1199,10 @@ export function parsePdfLines(
   if (rows.length < 8) {
     const loose = pdfLooseRows(lines, fallbackYear);
     if (loose.length > rows.length) rows.splice(0, rows.length, ...loose);
+    // Only trust the whole-page stream when the line parser found too little:
+    // a complete table is more precise than tokens gathered across chart labels.
+    const streamRows = pdfStreamRows(lines);
+    if (streamRows.length > rows.length) rows.splice(0, rows.length, ...streamRows);
   }
 
   if (!rows.length) {
