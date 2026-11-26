@@ -235,6 +235,53 @@ describe('PDF report imports', () => {
     expect(outcome.warnings[0]).toContain('Daily Log graph');
   });
 
+  test('reads clock labels whose colon is a private-use glyph', () => {
+    const max = Array.from({ length: 24 }, (_, hour) => (7 + hour * 0.2).toFixed(1));
+    const min = max.map((value) => (Number(value) - 1.1).toFixed(1));
+    const clock = (hour: number) => `${String(hour).padStart(2, '0')}\uE09200`;
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Daily Log 14 Days 13 Nov 2026 - 26 Nov 2026',
+        `FRI 13 NOVEMBER ${Array.from({ length: 12 }, (_, hour) => clock(hour * 2)).join(' ')} ${clock(0)}`,
+        `0 3.9 10.0 21.0 ${max.join(' ')}Max mmol/L ${min.join(' ')}Min mmol/L`,
+      ),
+      'custom-font-colon.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // 24 hourly maxima and 24 minima, not 14 hour-labels read as glucose.
+    expect(outcome.dataset.readings).toHaveLength(48);
+    expect(outcome.warnings[0]).toContain('Daily Log graph');
+  });
+
+  test('ignores chart time axes instead of turning them into a glucose table', () => {
+    const max = Array.from({ length: 24 }, (_, hour) => (8 + hour * 0.2).toFixed(1));
+    const min = max.map((value) => (Number(value) - 1.2).toFixed(1));
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Daily Log 14 Days 13 Nov 2026 - 26 Nov 2026',
+        'FRI 13 NOVEMBER',
+        '00:00 02:00 04:00 06:00 08:00 10:00 12:00 14:00 16:00 18:00 20:00 22:00 00:00',
+        '21.0',
+        'Glucose mmol/L 10.0',
+        '3.9',
+        '0',
+        `Max mmol/L ${max.join(' ')}`,
+        `Min mmol/L ${min.join(' ')}`,
+        // LibreView prints this axis on the Daily Patterns and Snapshot charts.
+        '00:00 06:00 12:00 18:00 00:00',
+      ),
+      'chart-axes.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(48);
+    expect(outcome.warnings[0]).toContain('Daily Log graph');
+    expect(outcome.warnings.join(' ')).not.toContain('PDF table');
+  });
+
   test('reads the hourly Max/Min values from a LibreView Daily Log graph', () => {
     const day = (weekday: string, dayOfMonth: number, start: number): string => {
       const max = Array.from({ length: 24 }, (_, hour) => (start + hour * 0.1).toFixed(1));
