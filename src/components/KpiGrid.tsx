@@ -118,8 +118,9 @@ export default function KpiGrid({ metrics, unit }: { metrics: Metrics; unit: Glu
             {fmt1(highTotal)}
             <span className="kpi-unit">%</span>
           </div>
+          {/* The profile goals are stated once, in the report footer. */}
           <div className="kpi-foot">
-            {fmt1(metrics.veryHigh)}% &gt;{fmtGlucose(VERY_HIGH, unit)} · target &lt; 25%
+            {fmt1(metrics.veryHigh)}% &gt;{fmtGlucose(VERY_HIGH, unit)}
           </div>
         </div>
 
