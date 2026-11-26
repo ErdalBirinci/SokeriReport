@@ -68,6 +68,8 @@ function toNumber(raw: unknown): number | null {
   let s = String(raw).trim();
   if (!s) return null;
   if (/^(nan|n\/a|null|-|--)$/i.test(s)) return null;
+  // Some exports mark a value as "<70" or add a footnote marker.
+  s = s.replace(/^[<>]\s*/, '').replace(/[*†‡]+$/, '').trim();
   if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
   else if (s.includes(',')) s = s.replace(/,/g, '');
   s = s.replace(/\s*(mg\/dl|mmol\/l|mg|mmol|u|units|einheiten|birim|g|gr|gramm)\s*$/i, '').replace(/\s/g, '');
@@ -263,14 +265,12 @@ function finalize(
     deduped.push(r);
   }
 
+  // Never block an upload that contains at least one usable reading. A short
+  // sample is honest but limited, so keep it and warn prominently instead of
+  // sending the user back to the export screen.
   if (deduped.length < 8) {
-    if (!allowSparse) {
-      return fail(
-        `Only ${deduped.length} valid glucose reading${deduped.length === 1 ? ' was' : 's were'} found; at least 8 are required for a report. Export a longer date range or check that the file contains individual readings.`,
-      );
-    }
     warnings.push(
-      `Only ${deduped.length} glucose readings were analyzed. This sample is too small for a representative glycemic report; do not use it for treatment decisions.`,
+      `Only ${deduped.length} glucose reading${deduped.length === 1 ? '' : 's'} were analyzed. This sample is too small for a representative glycemic report; do not use it for treatment decisions.`,
     );
   }
 
@@ -635,8 +635,15 @@ function parseGenericCsv(
   });
 
   const fields = parsed.meta.fields ?? [];
-  const timeCol = findColumn(fields, TEXT.genericTime);
   const valueCol = findColumn(fields, TEXT.genericValue);
+  const dateCol = fields.find((field) =>
+    /^(date|datum|tarih|fecha|data|dato)(?:\s*\([^)]*\))?$/i.test(field.trim()),
+  );
+  const clockCol = fields.find((field) =>
+    /^(time|uhrzeit|zeit|saat|hora|heure|ora)(?:\s*\([^)]*\))?$/i.test(field.trim()),
+  );
+  const splitDateAndTime = Boolean(dateCol && clockCol && dateCol !== clockCol);
+  const timeCol = splitDateAndTime ? dateCol : findColumn(fields, TEXT.genericTime);
 
   if (!timeCol || !valueCol) {
     return fail(
@@ -645,13 +652,20 @@ function parseGenericCsv(
   }
 
   const rows = parsed.data;
-  const dateInfo = dateSetup(rows.map((row) => row[timeCol] ?? ''), override);
+  // Many exports keep the date and clock in separate columns. Reading only
+  // one of them put every reading at midnight, so deduplication collapsed the
+  // whole file into a handful of points.
+  const timeOf = (row: Record<string, string>): string =>
+    splitDateAndTime
+      ? `${row[dateCol!] ?? ''} ${row[clockCol!] ?? ''}`.trim()
+      : (row[timeCol] ?? '');
+  const dateInfo = dateSetup(rows.map(timeOf), override);
   const dateOf = dateInfo.dateOf;
   const readings: Reading[] = [];
   let skipped = 0;
 
   for (const row of rows) {
-    const t = dateOf(row[timeCol] ?? '');
+    const t = dateOf(timeOf(row));
     const value = toNumber(row[valueCol]);
     if (t === null || value === null) {
       skipped++;
@@ -762,10 +776,6 @@ function pdfSummaryFacts(text: string): string {
   return facts.length ? ` The PDF does report ${facts.join(', ')}, but those are summary values.` : '';
 }
 
-function pdfTooFewMessage(count: number, text: string): string {
-  return `The PDF contains only ${count} usable glucose reading${count === 1 ? '' : 's'}; at least 8 are needed for a report.${pdfSummaryFacts(text)} Export a longer date range, or the raw data (LibreView → Download CSV; Dexcom Clarity → Export → CSV; Nightscout → JSON).`;
-}
-
 function pdfSummaryMessage(text: string): string {
   if (PDF_SUMMARY.test(text)) {
     return `This PDF is a summary report: it contains averages, TIR and charts, but not the individual glucose readings an analysis needs.${pdfSummaryFacts(text)} Export the raw data and upload that instead: LibreView → Download CSV; Dexcom Clarity → Export → CSV; Nightscout → JSON.`;
@@ -800,6 +810,8 @@ function normaliseYear(raw: string): string | null {
 function pdfDateHeader(line: string, fallbackYear: string | null): string | null {
   const stripped = line
     .replace(/^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.]?\s+/i, '')
+    .replace(/\s*\((?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\)\s*$/i, '')
+    .replace(/\s+(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -837,6 +849,75 @@ function pdfDateHeader(line: string, fallbackYear: string | null): string | null
 
 function pdfNumeric(raw: string): number | null {
   return toNumber(raw.replace(/^[<>]/, ''));
+}
+
+/**
+ * Last-resort scan for tables whose columns are not in "date time value"
+ * order. It finds the clock and date anywhere on the line and takes the
+ * plausible glucose number closest after the clock (or before it).
+ */
+function pdfLooseRows(lines: string[], fallbackYear: string): Array<{ time: string; value: number }> {
+  const result: Array<{ time: string; value: number }> = [];
+  let currentDate: string | null = null;
+  const timePattern = /\b(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\b/i;
+  const datePattern =
+    /(\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}[\s./-]+[A-Za-zÀ-ÿĀ-ž]{3,12}\.?[\s./,-]*\d{2,4}|[A-Za-zÀ-ÿĀ-ž]{3,12}[\s./-]+\d{1,2},?[\s./,-]*\d{2,4})/;
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^[•·]\s*/, '').trim();
+    const header = pdfDateHeader(line, fallbackYear);
+    if (header) {
+      currentDate = header;
+      continue;
+    }
+
+    const time = timePattern.exec(line);
+    if (!time || time.index === undefined) continue;
+    const dateMatch = datePattern.exec(line);
+    let date = currentDate;
+    if (dateMatch) {
+      const parsed = pdfDateHeader(dateMatch[0], fallbackYear);
+      if (parsed) {
+        date = parsed;
+        currentDate = parsed;
+      }
+    }
+    if (!date) continue;
+
+    const timeStart = time.index;
+    const timeEnd = timeStart + time[0].length;
+    const dateStart = dateMatch?.index ?? -1;
+    const dateEnd = dateStart >= 0 ? dateStart + dateMatch![0].length : -1;
+    const overlaps = (start: number, end: number, from: number, to: number) =>
+      start < to && end > from;
+
+    const candidates = [...line.matchAll(/[<>]?\d{1,4}(?:[.,]\d+)?/g)]
+      .filter((match) => {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (overlaps(start, end, timeStart, timeEnd)) return false;
+        return !(dateStart >= 0 && overlaps(start, end, dateStart, dateEnd));
+      })
+      .map((match) => ({ value: pdfNumeric(match[0]), at: match.index ?? 0 }))
+      .filter(
+        (candidate): candidate is { value: number; at: number } =>
+          candidate.value !== null && candidate.value >= 1 && candidate.value <= 600,
+      )
+      .sort((a, b) => {
+        const aAfter = a.at >= timeEnd;
+        const bAfter = b.at >= timeEnd;
+        if (aAfter !== bAfter) return aAfter ? -1 : 1;
+        const aDistance = aAfter ? a.at - timeEnd : timeStart - a.at;
+        const bDistance = bAfter ? b.at - timeEnd : timeStart - b.at;
+        return aDistance - bDistance;
+      });
+
+    if (candidates.length) {
+      result.push({ time: `${date} ${time[1]}`, value: candidates[0].value });
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -905,16 +986,14 @@ export function parsePdfLines(
     if (value !== null) rows.push({ time: `${date} ${row[2]}`, value });
   }
 
-  if (!rows.length) return fail(pdfSummaryMessage(text));
   if (rows.length < 8) {
-    if (!allowSparse) return fail(pdfTooFewMessage(rows.length, text));
+    const loose = pdfLooseRows(lines, fallbackYear);
+    if (loose.length > rows.length) rows.splice(0, rows.length, ...loose);
   }
 
+  if (!rows.length) return fail(pdfSummaryMessage(text));
+
   const unit = pdfUnit(text);
-  const header = unit ? `time,glucose (${unit})` : 'time,glucose';
-  // Quote both fields: named dates ("Oct 27, 2026") and decimal commas in
-  // mmol/L values would otherwise be split into extra CSV columns.
-  const csv = `${header}\n${rows.map((row) => `"${row.time.replace(/"/g, '""')}","${row.value}"`).join('\n')}`;
   const source = /libreview|freestyle libre/i.test(text)
     ? 'LibreView PDF'
     : /dexcom|clarity/i.test(text)
@@ -923,10 +1002,42 @@ export function parsePdfLines(
         ? 'Nightscout PDF'
         : 'PDF report';
 
+  // The rows are already structured. Parse them directly instead of rebuilding
+  // a CSV and sending it through the header/column matcher again: a named date
+  // or a decimal comma can no longer split a field on the second pass.
+  const dateInfo = dateSetup(rows.map((row) => row.time), override);
+  const readings: Reading[] = [];
+  let skipped = 0;
+  for (const row of rows) {
+    const t = dateInfo.dateOf(row.time);
+    if (t === null) {
+      skipped++;
+      continue;
+    }
+    readings.push({ t, v: row.value, kind: 'cgm' });
+  }
+
+  const warnings = [...dateInfo.warnings];
+  if (skipped > 0) warnings.push(`${skipped} PDF rows skipped because the date could not be read.`);
+
   // A table with at least eight rows is a real readings table; if duplicate
   // timestamps or a few invalid values reduce it, analyze the remainder with a
   // warning instead of sending the user back to the export screen.
-  const outcome = parseGenericCsv(csv, fileName, override, source, allowSparse || rows.length >= 8);
+  const outcome = finalize(
+    readings,
+    [],
+    [],
+    {
+      source,
+      fileName,
+      unit: unit ?? 'mg/dL',
+      date: dateInfo.meta,
+      time: dateInfo.time,
+    },
+    warnings,
+    unit,
+    allowSparse || rows.length >= 8,
+  );
   if (!outcome.ok) {
     const uniqueTimes = new Set(rows.map((row) => row.time)).size;
     return fail(
