@@ -108,6 +108,9 @@ export default function App() {
       setDataset(outcome.dataset);
       setPeriod(defaultPeriod(outcome.dataset));
       setWarnings(outcome.warnings);
+      // Open the report in the unit the file was printed in (mmol/L PDFs in
+      // mmol/L), instead of leaving the previous session's choice.
+      setUnit(outcome.dataset.meta.unit);
       setSourceFile(file);
       setPrevious(null);
       setPrintCheck(null);

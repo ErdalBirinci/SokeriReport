@@ -1222,93 +1222,68 @@ function pdfStreamRows(pages: string[]): Array<{ time: string; value: number }> 
   return rows;
 }
 
-/**
- * Turn a PDF reading table back into the same time/value pairs the CSV path
- * understands. Summary reports deliberately fail here: their averages and
- * charts cannot be expanded into individual readings without inventing data.
- */
-export function parsePdfLines(
-  pages: string[],
+function pdfDailyOutcome(
+  daily: { rows: Array<{ time: string; value: number }>; unit: 'mg/dL' | 'mmol/L'; days: number },
   fileName: string,
+  text: string,
   override?: DateOrder,
 ): ParseOutcome {
-  const text = pages.join('\n').trim();
-  if (!text) {
-    return fail(
-      'This PDF contains no selectable text, so no readings could be extracted. It may be scanned or image-only; upload the original CSV or JSON export instead.',
-      makeDiagnostics({
-        notes: ['The PDF has no selectable text; OCR would be required.'],
-      }),
-    );
-  }
-
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  // A year usually appears in the report period. If it does not, use the
-  // current year rather than refusing every date header that omits it.
-  const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
-
-  const daily = pdfDailyLogRows(text, fallbackYear);
-  if (daily) {
-    const dateInfo = dateSetup(daily.rows.map((row) => row.time), override);
-    const readings: Reading[] = [];
-    let skipped = 0;
-    for (const row of daily.rows) {
-      const t = dateInfo.dateOf(row.time);
-      if (t === null) {
-        skipped += 1;
-        continue;
-      }
-      readings.push({ t, v: row.value, kind: 'cgm' });
+  const dateInfo = dateSetup(daily.rows.map((row) => row.time), override);
+  const readings: Reading[] = [];
+  let skipped = 0;
+  for (const row of daily.rows) {
+    const t = dateInfo.dateOf(row.time);
+    if (t === null) {
+      skipped += 1;
+      continue;
     }
-
-    const source = /libreview|freestyle libre/i.test(text) ? 'LibreView PDF' : 'PDF report';
-    const warnings = [
-      `Read ${daily.days} ${daily.days === 1 ? 'day' : 'days'} of hourly min/max glucose from the PDF Daily Log graph.`,
-      'The PDF prints hourly Max/Min graph values, not the original 5-minute sensor readings; metrics are approximate.',
-      ...dateInfo.warnings,
-    ];
-    if (skipped > 0) warnings.push(`${skipped} PDF graph rows skipped because the date could not be read.`);
-
-    const outcome = finalize(
-      readings,
-      [],
-      [],
-      {
-        source,
-        fileName,
-        unit: daily.unit,
-        date: dateInfo.meta,
-        time: dateInfo.time,
-      },
-      warnings,
-      daily.unit,
-      {
-        rows: daily.rows.length,
-        dates: readings.length,
-        values: daily.rows.length,
-        removed: skipped
-          ? [{ label: 'skipped: the PDF date could not be read', count: skipped }]
-          : [],
-        notes: [
-          `Daily Log days: ${daily.days}`,
-          'Values are the hourly Max/Min labels printed on the LibreView graph.',
-        ],
-      },
-    );
-    if (outcome.ok) return outcome;
+    readings.push({ t, v: row.value, kind: 'cgm' });
   }
 
-  if (!hasPdfReadingsTable(lines, text)) {
-    return fail(
-      pdfSummaryMessage(text),
-      makeDiagnostics({
-        notes: [`No readings table header was found (${lines.length} text lines scanned).`],
-      }),
-    );
-  }
+  const source = /libreview|freestyle libre/i.test(text) ? 'LibreView PDF' : 'PDF report';
+  const warnings = [
+    `Read ${daily.days} ${daily.days === 1 ? 'day' : 'days'} of hourly min/max glucose from the PDF Daily Log graph.`,
+    'The PDF prints hourly Max/Min graph values, not the original 5-minute sensor readings; metrics are approximate.',
+    ...dateInfo.warnings,
+  ];
+  if (skipped > 0) warnings.push(`${skipped} PDF graph rows skipped because the date could not be read.`);
+
+  return finalize(
+    readings,
+    [],
+    [],
+    {
+      source,
+      fileName,
+      unit: daily.unit,
+      date: dateInfo.meta,
+      time: dateInfo.time,
+    },
+    warnings,
+    daily.unit,
+    {
+      rows: daily.rows.length,
+      dates: readings.length,
+      values: daily.rows.length,
+      removed: skipped
+        ? [{ label: 'skipped: the PDF date could not be read', count: skipped }]
+        : [],
+      notes: [
+        `Daily Log days: ${daily.days}`,
+        'Values are the hourly Max/Min labels printed on the LibreView graph.',
+      ],
+    },
+  );
+}
+
+function pdfTableOutcome(
+  lines: string[],
+  text: string,
+  fileName: string,
+  fallbackYear: string,
+  override?: DateOrder,
+): { outcome: ParseOutcome; rows: number } | null {
+  if (!hasPdfReadingsTable(lines, text)) return null;
 
   const rows: Array<{ time: string; value: number }> = [];
   let currentDate: string | null = null;
@@ -1355,14 +1330,7 @@ export function parsePdfLines(
     if (streamRows.length > rows.length) rows.splice(0, rows.length, ...streamRows);
   }
 
-  if (!rows.length) {
-    return fail(
-      pdfSummaryMessage(text),
-      makeDiagnostics({
-        notes: [`No date/time + glucose rows could be extracted (${lines.length} text lines scanned).`],
-      }),
-    );
-  }
+  if (!rows.length) return null;
 
   const unit = pdfUnit(text);
   const source = /libreview|freestyle libre/i.test(text)
@@ -1421,21 +1389,74 @@ export function parsePdfLines(
   );
   if (!outcome.ok) {
     const uniqueTimes = new Set(rows.map((row) => row.time)).size;
-    return fail(
-      `The PDF table produced ${rows.length} rows with ${uniqueTimes} distinct timestamps, but no usable glucose readings remained. Export the raw CSV/JSON for a complete report.`,
-      outcome.diagnostics ??
-        makeDiagnostics({
-          rows: rows.length,
-          dates,
-          values: rows.length,
-          notes: [`PDF text lines scanned: ${lines.length}`],
-        }),
-    );
+    return {
+      outcome: fail(
+        `The PDF table produced ${rows.length} rows with ${uniqueTimes} distinct timestamps, but no usable glucose readings remained. Export the raw CSV/JSON for a complete report.`,
+        outcome.diagnostics ??
+          makeDiagnostics({
+            rows: rows.length,
+            dates,
+            values: rows.length,
+            notes: [`PDF text lines scanned: ${lines.length}`],
+          }),
+      ),
+      rows: rows.length,
+    };
   }
   outcome.warnings.unshift(
     `Read ${rows.length} glucose readings from the PDF table. Check the report against the original PDF.`,
   );
-  return outcome;
+  return { outcome, rows: rows.length };
+}
+
+/**
+ * Turn a PDF reading table back into the same time/value pairs the CSV path
+ * understands. Summary reports deliberately fail here: their averages and
+ * charts cannot be expanded into individual readings without inventing data.
+ */
+export function parsePdfLines(
+  pages: string[],
+  fileName: string,
+  override?: DateOrder,
+): ParseOutcome {
+  const text = pages.join('\n').trim();
+  if (!text) {
+    return fail(
+      'This PDF contains no selectable text, so no readings could be extracted. It may be scanned or image-only; upload the original CSV or JSON export instead.',
+      makeDiagnostics({
+        notes: ['The PDF has no selectable text; OCR would be required.'],
+      }),
+    );
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  // A year usually appears in the report period. If it does not, use the
+  // current year rather than refusing every date header that omits it.
+  const fallbackYear = text.match(/\b(20\d{2})\b/)?.[1] ?? String(new Date().getFullYear());
+
+  const table = pdfTableOutcome(lines, text, fileName, fallbackYear, override);
+  // A printed date/time table is the exact series and wins over graph labels.
+  // A stray header match that yields too few rows is not a table, so the Daily
+  // Log graph still stands in for graph-only reports.
+  if (!table || !table.outcome.ok || table.rows < 8) {
+    const daily = pdfDailyLogRows(text, fallbackYear);
+    if (daily) return pdfDailyOutcome(daily, fileName, text, override);
+  }
+  if (table) return table.outcome;
+  const hasTableHeader = hasPdfReadingsTable(lines, text);
+  return fail(
+    pdfSummaryMessage(text),
+    makeDiagnostics({
+      notes: [
+        hasTableHeader
+          ? `No date/time + glucose table rows could be extracted (${lines.length} text lines scanned).`
+          : `No readings table header was found (${lines.length} text lines scanned).`,
+      ],
+    }),
+  );
 }
 
 function looksLikePdf(bytes: Uint8Array): boolean {

@@ -191,6 +191,50 @@ describe('PDF report imports', () => {
     expect(new Set(outcome.dataset.readings.map((reading) => new Date(reading.t).toDateString())).size).toBe(2);
   });
 
+  test('prefers a printed reading table over the Daily Log graph', () => {
+    const max = Array.from({ length: 24 }, (_, hour) => (10 + hour * 0.1).toFixed(1));
+    const min = max.map((value) => (Number(value) - 1.5).toFixed(1));
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Glucose Readings',
+        'Date Time Glucose (mmol/L)',
+        ...Array.from({ length: 12 }, (_, index) => {
+          const minute = (index % 6) * 5;
+          return `27.11.2026 ${8 + Math.floor(index / 6)}:${String(minute).padStart(2, '0')} ${(
+            6 + index * 0.2
+          ).toFixed(1)}`;
+        }),
+        'Daily Log',
+        `FRI 27 NOVEMBER Glucose mmol/L 00:00 0 3.9 10.0 21.0 ${max.join(' ')}Max mmol/L ${min.join(' ')}Min mmol/L`,
+      ),
+      'table-and-graph.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(12);
+    expect(outcome.warnings[0]).toContain('PDF table');
+    expect(outcome.warnings.join(' ')).not.toContain('Daily Log graph');
+  });
+
+  test('falls back to the Daily Log graph when a table header has no rows', () => {
+    const max = Array.from({ length: 24 }, (_, hour) => (10 + hour * 0.1).toFixed(1));
+    const min = max.map((value) => (Number(value) - 1.5).toFixed(1));
+    const outcome = parsePdfLines(
+      page(
+        'LibreView Glucose Readings',
+        'Daily Log 14 Days',
+        `FRI 27 NOVEMBER Glucose mmol/L 00:00 0 3.9 10.0 21.0 ${max.join(' ')}Max mmol/L ${min.join(' ')}Min mmol/L`,
+      ),
+      'graph-with-header.pdf',
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.dataset.readings).toHaveLength(48);
+    expect(outcome.warnings[0]).toContain('Daily Log graph');
+  });
+
   test('reads the hourly Max/Min values from a LibreView Daily Log graph', () => {
     const day = (weekday: string, dayOfMonth: number, start: number): string => {
       const max = Array.from({ length: 24 }, (_, hour) => (start + hour * 0.1).toFixed(1));
