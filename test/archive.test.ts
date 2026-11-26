@@ -21,6 +21,7 @@ const payload: ArchivePayload = {
       time: { absolute: false, utc: false },
     },
   },
+  warnings: ['Date format is ambiguous: 5 dates could be day/month or month/day.'],
   patient: 'Test patient',
   note: 'Follow-up in 3 months',
   summaryOverride: null,
@@ -38,6 +39,7 @@ describe('encrypted archive', () => {
     expect(opened.patient).toBe('Test patient');
     expect(opened.dataset.readings[0].v).toBe(112);
     expect(opened.note).toBe('Follow-up in 3 months');
+    expect(opened.warnings?.[0]).toContain('Date format is ambiguous');
   });
 
   test('rejects the wrong passphrase', async () => {

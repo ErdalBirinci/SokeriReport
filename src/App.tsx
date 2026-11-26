@@ -24,7 +24,7 @@ import {
   type ReportPeriod,
 } from './lib/period';
 import { prepareReportForPrint, resetPrintFit, type PrintPreflight } from './lib/printFit';
-import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './lib/printOptions';
+import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
 import { buildSummary } from './lib/summary';
 import type { Dataset, DateOrder } from './lib/types';
 
@@ -47,7 +47,7 @@ export default function App() {
   const [profile, setProfile] = useState<TargetProfileId>('standard');
   const [unit, setUnit] = useState<GlucoseUnit>('mg/dL');
   const [previous, setPrevious] = useState<{ fileName: string; dataset: Dataset } | null>(null);
-  const [printOptions, setPrintOptions] = useState<PrintOptions>(DEFAULT_PRINT_OPTIONS);
+  const [printOptions, setPrintOptions] = useState<PrintOptions>(() => loadPrintOptions());
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -56,6 +56,9 @@ export default function App() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
   const compareInput = useRef<HTMLInputElement>(null);
+  /** Tokens make the latest file win when two parses overlap. */
+  const parseToken = useRef(0);
+  const compareToken = useRef(0);
 
   const reportDataset = useMemo(
     () => (dataset ? sliceDataset(dataset, period) : null),
@@ -89,9 +92,14 @@ export default function App() {
   const handleFiles = useCallback(async (files: File[]) => {
     const file = files[0];
     if (!file) return;
+    const request = parseToken.current + 1;
+    parseToken.current = request;
     setBusy(true);
+    setReordering(false);
     setError(null);
     const outcome = await parseFileAsync(file);
+    // A newer drop or a reset has taken over; do not overwrite its state.
+    if (request !== parseToken.current) return;
     if (outcome.ok) {
       setDataset(outcome.dataset);
       setPeriod(defaultPeriod(outcome.dataset));
@@ -112,9 +120,12 @@ export default function App() {
   const handleCompareFile = useCallback(async (files: File[]) => {
     const file = files[0];
     if (!file) return;
+    const request = compareToken.current + 1;
+    compareToken.current = request;
     setError(null);
     setBusy(true);
     const outcome = await parseFileAsync(file);
+    if (request !== compareToken.current) return;
     if (outcome.ok) {
       setPrevious({ fileName: file.name, dataset: outcome.dataset });
     } else {
@@ -142,6 +153,25 @@ export default function App() {
     window.print();
   }, []);
 
+  // Printing from the browser menu (Ctrl+P) skips the button, so the same
+  // one-page fit runs on every print, and is cleared when printing ends.
+  useEffect(() => {
+    if (!metrics) return;
+    const beforePrint = () => {
+      prepareReportForPrint();
+    };
+    const afterPrint = () => {
+      resetPrintFit();
+      setPrintCheck(null);
+    };
+    window.addEventListener('beforeprint', beforePrint);
+    window.addEventListener('afterprint', afterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', beforePrint);
+      window.removeEventListener('afterprint', afterPrint);
+    };
+  }, [metrics]);
+
   useEffect(() => {
     if (!printCheck) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -152,6 +182,9 @@ export default function App() {
   }, [printCheck, cancelPrint]);
 
   const openArchive = useCallback(async () => {
+    parseToken.current += 1;
+    compareToken.current += 1;
+    setBusy(false);
     setArchiveOpen(true);
     setArchiveError(null);
     setArchiveNotice(null);
@@ -172,6 +205,7 @@ export default function App() {
         await saveArchive(label, passphrase, {
           dataset,
           period,
+          warnings,
           patient,
           note,
           summaryOverride,
@@ -186,10 +220,12 @@ export default function App() {
         setArchiveBusy(false);
       }
     },
-    [dataset, period, patient, note, summaryOverride, profile, unit],
+    [dataset, period, warnings, patient, note, summaryOverride, profile, unit],
   );
 
   const handleArchiveOpen = useCallback(async (id: string, passphrase: string) => {
+    parseToken.current += 1;
+    compareToken.current += 1;
     setArchiveBusy(true);
     setArchiveError(null);
     setArchiveNotice(null);
@@ -209,7 +245,14 @@ export default function App() {
       setSourceFile(null);
       setPrevious(null);
       setPrintCheck(null);
-      setWarnings(['Opened from the encrypted local archive.']);
+      const archiveNotes = ['Opened from the encrypted local archive.'];
+      if (payload.dataset.meta.date.uncertain) {
+        // Re-parsing needs the original export, which the archive does not hold.
+        archiveNotes.push(
+          'The saved date format is fixed in the archive; re-open the original export to switch it.',
+        );
+      }
+      setWarnings(Array.from(new Set([...archiveNotes, ...(payload.warnings ?? [])])));
       setArchiveOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
@@ -238,9 +281,12 @@ export default function App() {
   const changeDateOrder = useCallback(
     async (order: DateOrder) => {
       if (!sourceFile) return;
+      const request = parseToken.current + 1;
+      parseToken.current = request;
       setReordering(true);
       setError(null);
       const outcome = await parseFileAsync(sourceFile, { dateOrder: order });
+      if (request !== parseToken.current) return;
       if (outcome.ok) {
         setDataset(outcome.dataset);
         setPeriod((current) =>
@@ -277,6 +323,8 @@ export default function App() {
   }, []);
 
   const loadDemo = useCallback(() => {
+    parseToken.current += 1;
+    compareToken.current += 1;
     const demo = buildDemoDataset();
     setError(null);
     setBusy(false);
@@ -295,6 +343,9 @@ export default function App() {
   }, []);
 
   const reset = useCallback(() => {
+    parseToken.current += 1;
+    compareToken.current += 1;
+    setBusy(false);
     setSourceFile(null);
     setPrevious(null);
     setPrintCheck(null);
@@ -442,6 +493,7 @@ export default function App() {
           initial={printOptions}
           onSave={(next) => {
             setPrintOptions(next);
+            savePrintOptions(next);
             setSettingsOpen(false);
           }}
           onClose={() => setSettingsOpen(false)}

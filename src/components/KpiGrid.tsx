@@ -11,7 +11,7 @@ export default function KpiGrid({ metrics, unit }: { metrics: Metrics; unit: Glu
   const hypoNote =
     metrics.hypoEvents.length === 0
       ? 'No hypoglycemia events'
-      : `${metrics.hypoEvents.length} ${metrics.hypoEvents.length === 1 ? 'event' : 'events'} · longest ${metrics.longestHypoMinutes} min · level 2: ${metrics.severeHypoCount}`;
+      : `${metrics.hypoEvents.length} ${metrics.hypoEvents.length === 1 ? 'event' : 'events'} · longest ${metrics.longestHypoMinutes} min · level 2: ${metrics.level2HypoCount}`;
   const griTone =
     metrics.gri < 20
       ? 'gri-low'

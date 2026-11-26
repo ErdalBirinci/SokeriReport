@@ -1,4 +1,5 @@
-const CACHE = 'sokerireport-v4';
+const CACHE_PREFIX = 'sokerireport-shell-';
+const CACHE = `${CACHE_PREFIX}v5`;
 const SHARE_CACHE = 'sokerireport-share';
 const BASE = new URL('./', self.location.href).pathname;
 const PRECACHE = [
@@ -16,7 +17,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
+      // One missing optional asset must not fail the whole install.
+      .then((cache) => Promise.all(PRECACHE.map((url) => cache.add(url).catch(() => {}))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -25,7 +27,15 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) =>
+        // Only this app's own shell caches are versioned. Other projects hosted
+        // on the same origin and the pending-share cache must survive an update.
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+            .map((key) => caches.delete(key)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -83,16 +93,38 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Vite fingerprints everything under assets/, so those files are immutable
+  // and safe cache-first. Icons, fonts and the manifest keep stable names:
+  // serve the cached copy immediately, then refresh it in the background.
+  if (url.pathname.startsWith(`${BASE}assets/`)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        });
+      }),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-        }
-        return response;
-      });
+      const network = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => cached ?? Response.error());
+
+      return cached ?? network;
     }),
   );
 });

@@ -3,28 +3,36 @@
  *
  * `prepareReportForPrint` measures the live report with the print stylesheet
  * applied (same 190 mm content width as @page A4 with 10 mm side margins),
- * shrinking or reflowing the clinical summary until it fits on one page.
+ * reflowing the clinical summary into two columns before shrinking it, so the
+ * printed text stays as large as possible on one page.
  * Nothing is printed here; the caller decides what to do with the result.
  */
 
 const PAGE_HEIGHT = (279 / 25.4) * 96; // A4 content height with 9 mm top/bottom margins
-const SAFETY = 8; // px, keeps Chrome's pagination away from the edge
+/** px between the measured report and the page edge; Chrome's pagination needs room. */
+export const SAFETY = 16;
 
-interface FitStep {
+export interface FitStep {
   size: number;
   lineHeight: number;
   columns: number;
 }
 
-/** Ordered from most to least readable; two-column layouts come after single-column ones. */
-const FIT_STEPS: FitStep[] = [
-  { size: 6.3, lineHeight: 1.26, columns: 1 },
-  { size: 6.05, lineHeight: 1.24, columns: 1 },
-  { size: 5.8, lineHeight: 1.22, columns: 1 },
-  { size: 5.55, lineHeight: 1.2, columns: 1 },
-  { size: 6.3, lineHeight: 1.26, columns: 2 },
-  { size: 5.8, lineHeight: 1.22, columns: 2 },
+/**
+ * Ordered from most to least readable. Two columns come before further
+ * shrinking: an 7.8 px two-column summary is easier to read than a 6.8 px
+ * single-column one, and it is the same height.
+ */
+export const PRINT_FIT_STEPS: readonly FitStep[] = [
+  { size: 7.8, lineHeight: 1.34, columns: 1 },
+  { size: 7.8, lineHeight: 1.34, columns: 2 },
+  { size: 7.4, lineHeight: 1.32, columns: 2 },
+  { size: 7.0, lineHeight: 1.3, columns: 2 },
+  { size: 6.8, lineHeight: 1.3, columns: 2 },
 ];
+
+/** Smallest summary size the fit may use; below this the printout is not readable. */
+export const MIN_SUMMARY_SIZE = PRINT_FIT_STEPS[PRINT_FIT_STEPS.length - 1].size;
 
 export interface PrintPreflight {
   /** Measured print height of the report in px. */
@@ -39,6 +47,8 @@ export interface PrintPreflight {
   scaled: boolean;
   /** Summary font size as a percentage of the original print size. */
   scalePercent: number;
+  /** Summary font size in px that the printout will actually use. */
+  summarySize: number;
   /** True when the summary was reflowed into two print columns. */
   columns: boolean;
 }
@@ -70,7 +80,7 @@ html, body { width: 190mm !important; }
 }
 
 function applyStep(report: HTMLElement, level: number): void {
-  const step = FIT_STEPS[level];
+  const step = PRINT_FIT_STEPS[level];
   if (level === 0) {
     report.style.removeProperty('--print-summary-size');
     report.style.removeProperty('--print-summary-lh');
@@ -102,21 +112,22 @@ export function prepareReportForPrint(): PrintPreflight | null {
     let level = 0;
     let height = report.getBoundingClientRect().height;
 
-    while (height > PAGE_HEIGHT - SAFETY && level < FIT_STEPS.length - 1) {
+    while (height > PAGE_HEIGHT - SAFETY && level < PRINT_FIT_STEPS.length - 1) {
       level += 1;
       applyStep(report, level);
       height = report.getBoundingClientRect().height;
     }
 
     const fits = height <= PAGE_HEIGHT - SAFETY;
-    const step = FIT_STEPS[level];
+    const step = PRINT_FIT_STEPS[level];
     return {
       height: Math.round(height),
       pageHeight: Math.round(PAGE_HEIGHT),
       fits,
       level,
       scaled: fits && level > 0,
-      scalePercent: Math.round((step.size / FIT_STEPS[0].size) * 100),
+      scalePercent: Math.round((step.size / PRINT_FIT_STEPS[0].size) * 100),
+      summarySize: step.size,
       columns: step.columns > 1,
     };
   } finally {
