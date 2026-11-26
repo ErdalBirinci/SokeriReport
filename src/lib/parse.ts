@@ -839,7 +839,7 @@ const PDF_SUMMARY =
   /average glucose|mean glucose|time in range|glucose management indicator|ambulatory glucose profile|\bAGP\b/i;
 
 const WEEKDAY =
-  '(?:mon|tue|wed|thu|fri|sat|sun|pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|lunedì|lunedi|martedì|martedi|mercoledì|mercoledi|giovedì|giovedi|venerdì|venerdi|domenica|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)';
+  '(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|lunedì|lunedi|martedì|martedi|mercoledì|mercoledi|giovedì|giovedi|venerdì|venerdi|domenica|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)';
 
 const MONTHS: Record<string, string> = {
   jan: '01',
@@ -894,8 +894,10 @@ const MONTHS: Record<string, string> = {
   out: '10',
 };
 
-const PDF_DAY_HEADER =
-  /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Pazartesi|Salı|Sali|Çarşamba|Carsamba|Perşembe|Persembe|Cuma|Cumartesi|Pazar|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\s+(\d{1,2})\s+([A-Za-zÀ-ÿĀ-ž]{3,12})\b/gi;
+const PDF_DAY_HEADER = new RegExp(
+  `\\b(${WEEKDAY})\\s+(\\d{1,2})\\s+([A-Za-zÀ-ÿĀ-ž]{3,12})\\b`,
+  'gi',
+);
 
 function pdfNumbers(text: string, unit: 'mg/dL' | 'mmol/L'): number[] {
   const low = unit === 'mmol/L' ? 1 : 10;
