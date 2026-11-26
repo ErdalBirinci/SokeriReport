@@ -937,12 +937,25 @@ function pdfSummaryMessage(text: string): string {
 
 function hasPdfReadingsTable(lines: string[], text: string): boolean {
   if (PDF_READINGS_TITLE.test(text)) return true;
-  return lines.some((line) => {
-    if (/average|mean|median|statistics|distribution|percentile|time in range|target range/i.test(line)) {
-      return false;
-    }
-    return TEXT.glucose.test(line) && /(date|time|timestamp|zeit|tarih|zaman|datum|saat)/i.test(line);
-  });
+
+  const header = lines
+    .map((line, index) => ({ line, index }))
+    .filter(
+      ({ line }) =>
+        !/average|mean|median|statistics|distribution|percentile|time in range|target range/i.test(
+          line,
+        ),
+    );
+  const glucoseHeaders = header.filter(({ line }) => TEXT.glucose.test(line));
+  const timeHeaders = header.filter(({ line }) =>
+    /(date|time|timestamp|zeit|tarih|zaman|datum|saat)/i.test(line),
+  );
+
+  // Header cells are sometimes emitted on separate lines, so accept a glucose
+  // header and a date/time header that are close together as one table.
+  return glucoseHeaders.some((glucoseHeader) =>
+    timeHeaders.some((timeHeader) => Math.abs(glucoseHeader.index - timeHeader.index) <= 6),
+  );
 }
 
 function normaliseYear(raw: string): string | null {
