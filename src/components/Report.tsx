@@ -10,7 +10,13 @@ import HypoHistogram from './HypoHistogram';
 import InsightList from './InsightList';
 import KpiGrid from './KpiGrid';
 import QuestionCard from './QuestionCard';
-import { DAWN_THRESHOLD, PROFILE_OPTIONS, type Metrics, type TargetProfileId } from '../lib/metrics';
+import {
+  DAWN_THRESHOLD,
+  PROFILE_OPTIONS,
+  VERY_HIGH,
+  type Metrics,
+  type TargetProfileId,
+} from '../lib/metrics';
 import type { Dataset, DateOrder } from '../lib/types';
 import { clockLabel, dateLong, fmt1, fmtInt } from '../lib/format';
 import { UNIT_OPTIONS, fmtGlucose, rangeLabel, type GlucoseUnit } from '../lib/glucose';
@@ -79,6 +85,13 @@ export default function Report({
   const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time';
   const offsetMinutes = -new Date(metrics.start).getTimezoneOffset();
   const utcOffset = `UTC${offsetMinutes >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0')}:${String(Math.abs(offsetMinutes) % 60).padStart(2, '0')}`;
+  const goalsLabel =
+    `TIR >${targets.tirGoal}%, TBR <${targets.lowGoal}%, ` +
+    `TAR >${fmtGlucose(targets.high, unit)} <${targets.tarGoal}%` +
+    (targets.veryHighGoal !== undefined
+      ? `, >${fmtGlucose(VERY_HIGH, unit)} <${targets.veryHighGoal}%`
+      : '') +
+    ', CV <36%';
 
   const copySummary = async () => {
     try {
@@ -434,9 +447,8 @@ export default function Report({
           {printOptions.preparedBy.trim() ? ` · Prepared by ${printOptions.preparedBy.trim()}` : ''}
         </span>
         <span>
-          Data processed in the browser; no reading was sent to a server. Targets: {targets.label} ·
-          TIR &gt;70% ({rangeLabel(targets.low, targets.high, unit)}), TBR &lt;{targets.lowGoal}%, CV
-          &lt;36% (International Consensus).
+          Data processed in the browser; no reading was sent to a server. Targets: {targets.label} ·{' '}
+          {goalsLabel} (International Consensus).
         </span>
       </footer>
     </article>

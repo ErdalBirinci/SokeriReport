@@ -8,6 +8,14 @@ export const VERY_LOW = 54;
 export const VERY_HIGH = 250;
 export const TIGHT_HIGH = 140;
 
+/**
+ * GRI is defined on these fixed range boundaries (Klonoff/Bergenstal). They
+ * must not follow the selected target profile, otherwise GRI values from
+ * different profiles cannot be compared.
+ */
+export const GRI_LOW = 70;
+export const GRI_HIGH = 180;
+
 /** A "cluster" window is only reported with enough lows to be plausible. */
 export const HYPO_WINDOW_MIN_READINGS = 3;
 export const HYPO_WINDOW_MIN_SHARE = 25;
@@ -28,8 +36,14 @@ export interface TargetProfile {
   /** Tight range (time in tight range). */
   tightLow: number;
   tightHigh: number;
+  /** Time-in-range goal in percent. */
+  tirGoal: number;
   /** Time-below-range goal in percent. */
   lowGoal: number;
+  /** Time-above-range goal for `high` in percent. */
+  tarGoal: number;
+  /** Time-above-250 mg/dL goal in percent; pregnancy guidance sets none. */
+  veryHighGoal?: number;
 }
 
 export const TARGET_PROFILES: Record<TargetProfileId, TargetProfile> = {
@@ -40,7 +54,10 @@ export const TARGET_PROFILES: Record<TargetProfileId, TargetProfile> = {
     high: 180,
     tightLow: 70,
     tightHigh: 140,
+    tirGoal: 70,
     lowGoal: 4,
+    tarGoal: 25,
+    veryHighGoal: 5,
   },
   pregnancy: {
     id: 'pregnancy',
@@ -49,7 +66,9 @@ export const TARGET_PROFILES: Record<TargetProfileId, TargetProfile> = {
     high: 140,
     tightLow: 63,
     tightHigh: 140,
+    tirGoal: 70,
     lowGoal: 4,
+    tarGoal: 25,
   },
   pediatric: {
     id: 'pediatric',
@@ -58,7 +77,10 @@ export const TARGET_PROFILES: Record<TargetProfileId, TargetProfile> = {
     high: 180,
     tightLow: 70,
     tightHigh: 140,
+    tirGoal: 70,
     lowGoal: 4,
+    tarGoal: 25,
+    veryHighGoal: 5,
   },
   older: {
     id: 'older',
@@ -67,7 +89,10 @@ export const TARGET_PROFILES: Record<TargetProfileId, TargetProfile> = {
     high: 180,
     tightLow: 70,
     tightHigh: 140,
+    tirGoal: 50,
     lowGoal: 1,
+    tarGoal: 50,
+    veryHighGoal: 10,
   },
 };
 
@@ -491,9 +516,14 @@ function buildQuestions(m: Omit<Metrics, 'insights' | 'questions'>, unit: Glucos
       `CGM was active ${Math.round(m.coverage)}% of the time — can wear time be improved before the next review?`,
     );
   }
-  if (m.high + m.veryHigh > 25) {
+  if (m.high + m.veryHigh > t.tarGoal) {
     questions.push(
-      `Time above ${fmtGlucose(t.high, unit)} ${unit} is ${Math.round(m.high + m.veryHigh)}% — are pre-meal doses and carbohydrate counting aligned?`,
+      `Time above ${fmtGlucose(t.high, unit)} ${unit} is ${Math.round(m.high + m.veryHigh)}% (goal under ${t.tarGoal}%) — are pre-meal doses and carbohydrate counting aligned?`,
+    );
+  }
+  if (t.veryHighGoal !== undefined && m.veryHigh > t.veryHighGoal) {
+    questions.push(
+      `Time above ${fmtGlucose(VERY_HIGH, unit)} ${unit} is ${Math.round(m.veryHigh)}% (goal under ${t.veryHighGoal}%) — which meals drive the highest peaks?`,
     );
   }
   if (m.longestHypoMinutes >= 60) {
@@ -514,17 +544,17 @@ function buildInsights(
   const lowTotal = m.low + m.veryLow;
   const highTotal = m.high + m.veryHigh;
 
-  if (m.target >= 70) {
+  if (m.target >= t.tirGoal) {
     out.push({
       tone: 'good',
       title: `Time in range ${p1(m.target)}%`,
-      body: `TIR is above the 70% target: ${p1(m.target)}% of ${fmtInt(m.count)} readings are within ${rangeLabel(t.low, t.high, unit)}.`,
+      body: `TIR is above the ${t.tirGoal}% target: ${p1(m.target)}% of ${fmtInt(m.count)} readings are within ${rangeLabel(t.low, t.high, unit)}.`,
     });
-  } else if (m.target >= 50) {
+  } else if (m.target >= Math.max(0, t.tirGoal - 20)) {
     out.push({
       tone: 'warn',
       title: `Time in range ${p1(m.target)}%`,
-      body: 'TIR is below the recommended 70% target. Review post-meal peaks and basal settings.',
+      body: `TIR is below the recommended ${t.tirGoal}% target. Review post-meal peaks and basal settings.`,
     });
   } else {
     out.push({
@@ -603,11 +633,15 @@ function buildInsights(
     });
   }
 
-  if (highTotal > 25) {
+  const highOverGoal = highTotal > t.tarGoal;
+  const veryHighOverGoal = t.veryHighGoal !== undefined && m.veryHigh > t.veryHighGoal;
+  if (highOverGoal || veryHighOverGoal) {
     out.push({
       tone: 'warn',
       title: `Time above range ${p1(highTotal)}%`,
-      body: `Time above ${fmtGlucose(t.high, unit)} ${unit} is over the 25% target. Review pre-meal values and carbohydrate counting.`,
+      body: highOverGoal
+        ? `Time above ${fmtGlucose(t.high, unit)} ${unit} is over the ${t.tarGoal}% target. Review pre-meal values and carbohydrate counting.`
+        : `Time above ${fmtGlucose(VERY_HIGH, unit)} ${unit} is ${p1(m.veryHigh)}%, over the ${t.veryHighGoal}% target. Review post-meal peaks and basal settings.`,
     });
   }
 
@@ -664,7 +698,18 @@ export function computeMetrics(dataset: Dataset, options: ComputeOptions = {}): 
   const lowPct = percent(lowCount, count);
   const veryHighPct = percent(veryHighCount, count);
   const highPct = percent(highCount, count);
-  const gri = Math.min(100, 3.0 * veryLowPct + 2.4 * lowPct + 0.8 * veryHighPct + 0.5 * highPct);
+
+  // Time in range and its display bands follow the profile; GRI keeps its own
+  // fixed 54/70/180/250 bands so it remains comparable between profiles.
+  const griLowCount = values.filter((v) => v >= VERY_LOW && v < GRI_LOW).length;
+  const griHighCount = values.filter((v) => v > GRI_HIGH && v <= VERY_HIGH).length;
+  const gri = Math.min(
+    100,
+    3.0 * veryLowPct +
+      2.4 * percent(griLowCount, count) +
+      0.8 * veryHighPct +
+      0.5 * percent(griHighCount, count),
+  );
 
   const hypoEvents = detectHypoEvents(readings, intervalMin, targets.low);
   const longestHypoMinutes = hypoEvents.reduce((max, e) => Math.max(max, e.minutes), 0);

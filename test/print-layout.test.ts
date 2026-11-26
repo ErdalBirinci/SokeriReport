@@ -55,7 +55,7 @@ describe('optional print layout', () => {
     expect(optional).toContain('display: grid');
     expect(optional).toContain('grid-template-columns: 60px minmax(0, 1fr)');
     expect(block).toMatch(/\.print-optional \.quality-note[\s\S]*?display:\s*none/);
-    expect(rule(block, '.chart-agp svg')).toMatch(/height:\s*170px/);
+    expect(rule(block, '.chart-agp svg')).toMatch(/height:\s*160px/);
   });
 
   test('keeps every printed font readable', () => {

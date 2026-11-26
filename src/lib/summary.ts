@@ -1,4 +1,4 @@
-import type { Metrics } from './metrics';
+import { VERY_HIGH, type Metrics } from './metrics';
 import type { Dataset } from './types';
 import { clockLabel, dateLong, fmt1, fmtInt } from './format';
 import { fmtGlucose, rangeLabel, type GlucoseUnit } from './glucose';
@@ -34,6 +34,11 @@ export function buildSummary(
   );
   lines.push(
     `• GMI ${fmt1(metrics.gmi)}% · ADAG eA1c ${fmt1(metrics.ea1c)}% · CGM active ${fmtInt(metrics.coverage)}%`,
+  );
+  lines.push(
+    `• Goals: TIR >${t.tirGoal}% (${rangeLabel(t.low, t.high, unit)}) · below ${t.low} <${t.lowGoal}% · above ${t.high} <${t.tarGoal}%${
+      t.veryHighGoal !== undefined ? ` · above ${VERY_HIGH} <${t.veryHighGoal}%` : ''
+    }`,
   );
   lines.push('');
 

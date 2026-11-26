@@ -7,6 +7,9 @@ export default function KpiGrid({ metrics, unit }: { metrics: Metrics; unit: Glu
   const t = metrics.targets;
   const lowTotal = metrics.low + metrics.veryLow;
   const highTotal = metrics.high + metrics.veryHigh;
+  const highGoalNote = `goal <${t.tarGoal}% above ${fmtGlucose(t.high, unit)}${
+    t.veryHighGoal !== undefined ? ` · <${t.veryHighGoal}% above ${fmtGlucose(VERY_HIGH, unit)}` : ''
+  }`;
   const cvTone = metrics.cv > 36 ? 'tone-amber' : 'tone-teal';
   const hypoNote =
     metrics.hypoEvents.length === 0
@@ -119,7 +122,7 @@ export default function KpiGrid({ metrics, unit }: { metrics: Metrics; unit: Glu
             <span className="kpi-unit">%</span>
           </div>
           <div className="kpi-foot">
-            {fmt1(metrics.veryHigh)}% &gt;{fmtGlucose(VERY_HIGH, unit)} · target &lt; 25%
+            {fmt1(metrics.veryHigh)}% &gt;{fmtGlucose(VERY_HIGH, unit)} · {highGoalNote}
           </div>
         </div>
 
